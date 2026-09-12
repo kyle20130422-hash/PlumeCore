@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Component & Physics Node Engine (v11 音效時長修正)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', 'Segoe UI', monospace; }
+    body { display: flex; flex-direction: column; height: 100vh; background: #1e1e1e; color: #ccc; user-select: none; }
+
+    header { background: #2d2d2d; height: 42px; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 2px solid #181818; }
+    .logo { font-weight: bold; color: #81c784; font-size: 14px; }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .btn-file { background: #37474f; color: white; border: none; padding: 6px 14px; border-radius: 3px; font-weight: bold; cursor: pointer; font-size: 12px; }
+    .btn-file:hover { background: #455a64; }
+    .btn-play { background: #4caf50; color: white; border: none; padding: 6px 18px; border-radius: 3px; font-weight: bold; cursor: pointer; }
+    .btn-play.running { background: #e53935; }
+
+    main { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+    #hierarchy { width: 240px; background: #252526; border-right: 2px solid #181818; display: flex; flex-direction: column; }
+    .panel-header { background: #2d2d2d; padding: 6px 10px; font-size: 11px; font-weight: bold; color: #aaa; text-transform: uppercase; border-bottom: 1px solid #181818; display: flex; justify-content: space-between; align-items: center; }
+    .btn-add { background: #007acc; color: white; border: none; padding: 2px 8px; border-radius: 2px; cursor: pointer; font-size: 11px; }
+    #object-tree { flex: 1; overflow-y: auto; list-style: none; padding: 5px 0; }
+    .tree-item { padding: 5px 8px; font-size: 12px; cursor: pointer; color: #9cdcfe; display: flex; align-items: center; gap: 4px; }
+    .tree-item:hover { background: #2a2d2e; }
+    .tree-item.selected { background: #094771; color: white; }
+    .tree-item .tag-locked { color: #ffb74d; font-size: 10px; }
+    .tree-item .tag-hidden { color: #888; font-size: 10px; }
+    .tree-item .tag-special { color: #4ec9b0; font-size: 10px; }
+
+    #viewport { flex: 1; background: #1e1e1e; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+    #viewport-toolbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 10; }
+    .tool-btn { background: #2d2d2d; color: #ccc; border: 1px solid #444; padding: 4px 10px; font-size: 11px; border-radius: 3px; cursor: pointer; }
+    .tool-btn.active { background: #007acc; color: white; border-color: #007acc; }
+    canvas { background: #121212; border: 1px solid #3c3c3c; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+
+    #console-wrapper {
+      width: 100%;
+      border-top: 2px solid #2d2d2d;
+      background: #181818;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+    }
+    #console-wrapper.has-error {
+      border-top-color: #e53935;
+      box-shadow: 0 -2px 12px rgba(229,57,53,0.4);
+      background: #241010;
+    }
+    #console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 10px;
+      font-size: 10px;
+      color: #666;
+      background: #1b1b1b;
+      border-bottom: 1px solid #252525;
+    }
+    #console-wrapper.has-error #console-header { color: #ff8a80; background: #2a0e0e; }
+    #console-status { font-weight: bold; }
+    #console-clear {
+      background: transparent;
+      border: 1px solid #444;
+      color: #888;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    #console-clear:hover { background: #333; color: #fff; }
+    #console-box { height: 80px; padding: 8px 10px; font-size: 11px; color: #4ec9b0; overflow-y: auto; }
+    #console-box .log-error { color: #ff5555; font-weight: bold; }
+    #console-box .log-warn { color: #ffaa00; }
+    #console-box .log-info { color: #4ec9b0; }
+    #console-box .log-sys { color: #888; }
+
+    #inspector { width: 300px; background: #252526; border-left: 2px solid #181818; display: flex; flex-direction: column; padding: 10px; gap: 10px; overflow-y: auto; }
+    .prop-group { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+    .prop-row { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
+    .prop-row label { width: 90px; color: #888; }
+    .prop-row input, .prop-row select { flex: 1; background: #3c3c3c; border: 1px solid #555; color: white; padding: 4px; font-size: 12px; border-radius: 2px; }
+    .prop-row input[type="checkbox"] { flex: none; width: 16px; height: 16px; }
+    .toggle-row { display: flex; gap: 8px; }
+    .toggle-row button { flex: 1; padding: 5px; font-size: 11px; background: #3c3c3c; color: #ccc; border: 1px solid #555; border-radius: 2px; cursor: pointer; }
+    .toggle-row button.active { background: #007acc; color: white; border-color: #007acc; }
+    #scriptEditor { flex: 1; min-height: 120px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #3c3c3c; padding: 8px; font-size: 12px; resize: none; outline: none; line-height: 1.4; user-select: text; font-family: 'Consolas', monospace; }
+
+    #context-menu { display: none; position: fixed; background: #252526; border: 1px solid #454545; box-shadow: 0 4px 12px rgba(0,0,0,0.6); z-index: 1000; width: 240px; border-radius: 3px; overflow: hidden; }
+    .menu-header { background: #1b1b1c; padding: 6px 12px; font-size: 11px; color: #888; border-bottom: 1px solid #333; }
+    .menu-item { padding: 7px 12px; font-size: 12px; color: #ccc; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    .menu-item:hover { background: #094771; color: white; }
+    .menu-divider { height: 1px; background: #3c3c3c; margin: 3px 0; }
+
+    .hint { color: #666; font-size: 10px; margin-top: 4px; }
+    .comp-tip { color: #4ec9b0; font-size: 10px; padding: 4px 6px; background: #1a2a26; border-radius: 3px; border-left: 2px solid #4ec9b0; }
+    .app-preview-box { text-align: center; padding: 6px; background: #1a1a1a; border: 1px solid #333; border-radius: 3px; min-height: 40px; display: flex; align-items: center; justify-content: center; }
+    .app-preview-box img, .app-preview-box video { max-width: 100%; max-height: 90px; }
+
+    #projectFileInput { display: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">🎮PlumeCore</div>
+    <div class="header-actions">
+      <button class="btn-file" onclick="openProject()">📂 開啟專案</button>
+      <button class="btn-file" onclick="downloadProject()">📥 下載專案</button>
+      <button id="playBtn" class="btn-play" onclick="togglePlay()">▶ Play (播放遊戲)</button>
+      <input type="file" id="projectFileInput" accept=".json,.txt,application/json" onchange="handleProjectFile(event)">
+    </div>
+  </header>
+
+  <main>
+    <section id="hierarchy">
+      <div class="panel-header">
+        <span>Hierarchy</span>
+        <button class="btn-add" onclick="createNewObject(null, 'rect', 'New Entity')">+ 新增物件</button>
+      </div>
+      <div id="object-tree"></div>
+    </section>
+
+    <section id="viewport">
+      <div id="viewport-toolbar">
+        <button class="tool-btn" onclick="resetCamera()">🎯 重置視角</button>
+        <button class="tool-btn active" id="gridToggle" onclick="toggleGrid()">📐 網格</button>
+      </div>
+      <canvas id="gameCanvas" width="520" height="340"></canvas>
+
+      <div id="console-wrapper">
+        <div id="console-header">
+          <span id="console-status">✔ 系統正常</span>
+          <button id="console-clear" onclick="clearConsole()">清除</button>
+        </div>
+        <div id="console-box"></div>
+      </div>
+    </section>
+
+    <section id="inspector">
+      <div class="panel-header">Inspector</div>
+      <div id="inspector-content" style="display:none; flex-direction:column; gap:10px; height:100%;">
+
+        <div class="prop-group">
+          <div class="prop-row"><label>名稱</label><input type="text" id="propName" oninput="updateCommonProps()"></div>
+          <div class="comp-tip" id="propNodeTypeTip">類型：Node</div>
+        </div>
+
+        <div class="prop-group" id="props-main-group" style="display:none;">
+          <div class="prop-row"><label>Local X</label><input type="number" id="propX" oninput="updateCurrentObj()"></div>
+          <div class="prop-row"><label>Local Y</label><input type="number" id="propY" oninput="updateCurrentObj()"></div>
+          <div class="prop-row"><label>Width</label><input type="number" id="propW" oninput="updateCurrentObj()"></div>
+          <div class="prop-row"><label>Height</label><input type="number" id="propH" oninput="updateCurrentObj()"></div>
+          <div class="prop-row"><label>Color</label><input type="color" id="propColor" oninput="updateCurrentObj()"></div>
+        </div>
+
+        <div class="prop-group" id="props-wasd-group" style="display:none;">
+          <label style="color:#81c784; font-weight:bold;">🎮 WASD 控制設定</label>
+          <div class="prop-row"><label>移動速度</label><input type="number" id="propWasdSpeed" oninput="updateComponentProp()"></div>
+          <div class="comp-tip" id="wasdModeTip">模式：未偵測</div>
+        </div>
+
+        <div class="prop-group" id="props-gravity-group" style="display:none;">
+          <label style="color:#81c784; font-weight:bold;">⚓ 重力設定</label>
+          <div class="prop-row"><label>重力大小</label><input type="number" id="propGravity" oninput="updateComponentProp()"></div>
+        </div>
+
+        <div class="prop-group" id="props-jump-group" style="display:none;">
+          <label style="color:#81c784; font-weight:bold;">🐆 跳躍設定</label>
+          <div class="prop-row"><label>跳躍力度</label><input type="number" id="propJumpForce" oninput="updateComponentProp()"></div>
+        </div>
+
+        <div class="prop-group" id="props-bounce-group" style="display:none;">
+          <label style="color:#81c784; font-weight:bold;">⚡ 邊界彈跳設定</label>
+          <div class="prop-row"><label>水平速度</label><input type="number" id="propBounceX" oninput="updateComponentProp()"></div>
+          <div class="prop-row"><label>垂直速度</label><input type="number" id="propBounceY" oninput="updateComponentProp()"></div>
+        </div>
+
+        <div class="prop-group" id="props-collider-group" style="display:none;">
+          <div class="comp-tip">🧱 碰撞箱跟隨父節點的寬高，無法單獨調整。</div>
+        </div>
+
+        <div class="prop-group" id="props-camera-group" style="display:none;">
+          <label style="color:#4ec9b0; font-weight:bold;">🎥 攝影機偏移</label>
+          <div class="prop-row"><label>Offset X</label><input type="number" id="propCamOffX" oninput="updateComponentProp()"></div>
+          <div class="prop-row"><label>Offset Y</label><input type="number" id="propCamOffY" oninput="updateComponentProp()"></div>
+          <div class="hint">正值 = 畫面往右下移 · 負值 = 畫面往左上移</div>
+        </div>
+
+        <div class="prop-group" id="props-worldbounds-group" style="display:none;">
+          <div class="comp-tip">🗺️ 世界大小 = 父節點的寬高。調整父節點寬高即可改變世界範圍。</div>
+        </div>
+
+        <div class="prop-group" id="props-appearance-group" style="display:none;">
+          <label style="color:#ff9800; font-weight:bold;">🎨 外觀設定</label>
+          <div class="prop-row"><label>啟動代碼</label><input type="text" id="propAppCode" oninput="updateComponentProp()" placeholder="[W1]"></div>
+          <div class="hint">[] 預設 · [W] 按 W · [W1] 按 W 顯示 1 秒 · [S2] 按 S 顯示 2 秒</div>
+          <div class="prop-row">
+            <label>檔案類型</label>
+            <select id="propAppSrcType" onchange="updateComponentProp()">
+              <option value="image">圖片</option>
+              <option value="video">影片</option>
+            </select>
+          </div>
+
+          <div id="videoSoundSection" style="display:none; flex-direction:column; gap:6px; padding:6px; background:#1e1e1e; border:1px solid #333; border-radius:3px;">
+            <div class="prop-row">
+              <label style="color:#ff9800; width:auto; flex:1;">🔊 開始遊戲後播放音效</label>
+              <input type="checkbox" id="propVideoSound" onchange="updateComponentProp()">
+            </div>
+            <div class="prop-row">
+              <label>音量</label>
+              <input type="range" id="propVideoVolume" min="0" max="1" step="0.05" value="1" oninput="updateComponentProp()" style="flex:1;">
+              <span id="propVideoVolumeVal" style="color:#888; font-size:10px; width:32px; text-align:right;">100%</span>
+            </div>
+            <div class="hint" style="margin-top:0;">🎵 音效時長與代碼一致 · [W1] = 1 秒</div>
+          </div>
+
+          <button class="btn-file" style="width:100%; padding:6px;" onclick="uploadAppearanceFile()">📁 上傳圖片 / 影片</button>
+          <div class="app-preview-box" id="app-preview">尚未上傳檔案</div>
+          <div class="hint">解析後：<span id="app-parsed">鍵=預設, 時間=無限</span></div>
+        </div>
+
+        <div class="prop-group">
+          <div class="toggle-row">
+            <button id="lockBtn" onclick="toggleLock()">🔓 未鎖定</button>
+            <button id="visibleBtn" onclick="toggleVisible()">👁 可見</button>
+          </div>
+        </div>
+
+        <div class="prop-group" style="flex:1; display:flex;">
+          <label style="color:#81c784; font-weight:bold;">⚡ 附著自訂腳本:</label>
+          <textarea id="scriptEditor" spellcheck="false" oninput="updateScript()" placeholder="// 可用變數：self, dt, Input, canvas, log, gameObjects"></textarea>
+        </div>
+      </div>
+      <div id="inspector-empty" style="color:#666; font-size:12px; text-align:center; margin-top:20px;">
+        請選擇一個物件
+      </div>
+    </section>
+  </main>
+
+  <div id="context-menu">
+    <div class="menu-header" id="menuTitle">[Node] 即時選項</div>
+    <div class="menu-item" onclick="renameSelectedNode()">✏️ 重新命名 (F2)</div>
+    <div class="menu-item" onclick="duplicateSelectedObject()">📋 複製此節點 (Ctrl+D)</div>
+    <div class="menu-item" onclick="focusScriptEditor()">📜 編輯節點程式碼</div>
+
+    <div class="menu-divider"></div>
+    <div class="menu-header">➕ 新增子節點 / 組件</div>
+    <div class="menu-item" onclick="addNodeComponent('wall_collider')">🧱 碰撞箱 (不可穿透)</div>
+    <div class="menu-item" onclick="addNodeComponent('wasd')">🎮 WASD / 方向鍵控制</div>
+    <div class="menu-item" onclick="addNodeComponent('gravity')">⚓ 重力 (Gravity)</div>
+    <div class="menu-item" onclick="addNodeComponent('jump')">🐆 跳躍 (Jump)</div>
+    <div class="menu-item" onclick="addNodeComponent('bounce')">⚡ 邊界彈跳</div>
+    <div class="menu-item" onclick="addNodeComponent('shape_rect')">■ 幾何子物件 (矩形)</div>
+
+    <div class="menu-divider"></div>
+    <div class="menu-header">🎨 外觀系統</div>
+    <div class="menu-item" onclick="addNodeComponent('appearance')">🎨 外觀 (可上傳圖片/影片)</div>
+
+    <div class="menu-divider"></div>
+    <div class="menu-header">🌍 世界 / 攝影機</div>
+    <div class="menu-item" onclick="addNodeComponent('world_bounds')">🗺️ 世界邊界</div>
+    <div class="menu-item" onclick="addNodeComponent('camera_follow')">🎥 攝影機跟隨</div>
+
+    <div class="menu-divider"></div>
+    <div class="menu-item" onclick="deleteSelectedObject()" style="color:#ff5252;">❌ 刪除此節點 (Delete)</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const consoleBox = document.getElementById('console-box');
+    const consoleWrapper = document.getElementById('console-wrapper');
+    const consoleStatus = document.getElementById('console-status');
+    const contextMenu = document.getElementById('context-menu');
+
+    let gameObjects = [];
+    let selectedObjId = null;
+    let isPlaying = false;
+    let animationId = null;
+    let playSnapshot = null;
+    let showGrid = true;
+    const keys = {};
+
+    let cameraX = 0, cameraY = 0;
+    let cameraZoom = 1.0;
+    let worldWidth = 0, worldHeight = 0;
+
+    let isDragging = false;
+    let isResizing = false;
+    let isPanning = false;
+    let panStart = { x: 0, y: 0 };
+    let panStartCamera = { x: 0, y: 0 };
+    let panMoved = false;
+    let dragTargetId = null;
+    let dragOffset = { x: 0, y: 0 };
+    let resizeHandle = null;
+    let resizeStartMouse = { x: 0, y: 0 };
+    let resizeStartObj = null;
+
+    const HANDLE_SIZE = 8;
+    const MIN_SIZE = 10;
+    const GRID_SIZE = 10;
+    const SNAP_SIZE = 10;
+    const PROJECT_VERSION = 3;
+    const CAM_STEP = 30;
+    const ZOOM_MIN = 0.2;
+    const ZOOM_MAX = 5.0;
+
+    // ============ 音訊解鎖 ============
+    let audioUnlocked = false;
+    function tryUnlockAudio() {
+      if (!audioUnlocked) {
+        audioUnlocked = true;
+        log('🔊 音訊已解鎖，Play 後影片將有聲音', 'sys');
+      }
+    }
+    window.addEventListener('click', tryUnlockAudio);
+    window.addEventListener('keydown', tryUnlockAudio);
+    window.addEventListener('touchstart', tryUnlockAudio);
+
+    // ============ 錯誤/訊息系統 ============
+    function log(msg, type = 'info') {
+      const cls = 'log-' + type;
+      const prefix = type === 'error' ? '❌' : (type === 'warn' ? '⚠️' : (type === 'sys' ? '·' : '>'));
+      consoleBox.innerHTML += `<div class="${cls}">${prefix} ${msg}</div>`;
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+      if (type === 'error') {
+        consoleWrapper.classList.add('has-error');
+        consoleStatus.textContent = '❌ 有錯誤';
+      }
+    }
+
+    function clearConsole() {
+      consoleBox.innerHTML = '';
+      consoleWrapper.classList.remove('has-error');
+      consoleStatus.textContent = '✔ 系統正常';
+    }
+
+    // ============ 攝影機邊界 ============
+    function clampCamera() {
+      const ws = getWorldSize();
+      const viewW = canvas.width / cameraZoom;
+      const viewH = canvas.height / cameraZoom;
+      if (ws.width <= viewW) cameraX = -(viewW - ws.width) / 2;
+      else cameraX = Math.max(0, Math.min(cameraX, ws.width - viewW));
+      if (ws.height <= viewH) cameraY = -(viewH - ws.height) / 2;
+      else cameraY = Math.max(0, Math.min(cameraY, ws.height - viewH));
+    }
+
+    // ============ 專案存檔 / 讀檔 ============
+    function openProject() { document.getElementById('projectFileInput').click(); }
+
+    function handleProjectFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          loadProject(data);
+        } catch (err) {
+          log(`專案載入失敗：${err.message}`, 'error');
+        }
+      };
+      reader.onerror = () => log('檔案讀取失敗', 'error');
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function loadProject(data) {
+      if (!data || typeof data !== 'object') { log('專案格式錯誤', 'error'); return; }
+      if (!Array.isArray(data.objects)) { log('專案格式錯誤：缺少 objects 陣列', 'error'); return; }
+
+      gameObjects.forEach(obj => {
+        if (obj.nodeType === 'appearance' && obj._videoEl) {
+          try { obj._videoEl.pause(); obj._videoEl.src = ''; } catch(e){}
+        }
+      });
+
+      const loaded = [];
+      let skipped = 0;
+      for (const raw of data.objects) {
+        if (typeof raw !== 'object' || raw === null) { skipped++; continue; }
+        const nodeType = typeof raw.nodeType === 'string' ? raw.nodeType : 'rect';
+        const obj = {
+          id: (typeof raw.id === 'number' || typeof raw.id === 'string') ? raw.id : Date.now() + Math.random(),
+          parentId: raw.parentId !== undefined ? raw.parentId : null,
+          name: typeof raw.name === 'string' ? raw.name : 'Node',
+          nodeType,
+          x: typeof raw.x === 'number' ? raw.x : 0,
+          y: typeof raw.y === 'number' ? raw.y : 0,
+          width: typeof raw.width === 'number' ? raw.width : 40,
+          height: typeof raw.height === 'number' ? raw.height : 40,
+          color: typeof raw.color === 'string' ? raw.color : '#47a3ff',
+          vx: 0, vy: 0, isGrounded: false, _prevJumpPressed: false,
+          locked: !!raw.locked,
+          visible: raw.visible !== false,
+          cameraOffsetX: typeof raw.cameraOffsetX === 'number' ? raw.cameraOffsetX : 0,
+          cameraOffsetY: typeof raw.cameraOffsetY === 'number' ? raw.cameraOffsetY : 0,
+          scriptText: typeof raw.scriptText === 'string' ? raw.scriptText : '',
+          runtime: { onUpdate: null, error: null }
+        };
+        if (nodeType === 'wasd') obj.speed = typeof raw.speed === 'number' ? raw.speed : 200;
+        if (nodeType === 'gravity') obj.gravity = typeof raw.gravity === 'number' ? raw.gravity : 700;
+        if (nodeType === 'jump') obj.jumpForce = typeof raw.jumpForce === 'number' ? raw.jumpForce : 350;
+        if (nodeType === 'bounce') {
+          obj.speedX = typeof raw.speedX === 'number' ? raw.speedX : 100;
+          obj.speedY = typeof raw.speedY === 'number' ? raw.speedY : 0;
+        }
+        if (nodeType === 'appearance') {
+          obj.appCode = typeof raw.appCode === 'string' ? raw.appCode : '[]';
+          obj.appKey = typeof raw.appKey === 'string' ? raw.appKey : '';
+          obj.appDuration = typeof raw.appDuration === 'number' ? raw.appDuration : 0;
+          obj.srcType = raw.srcType === 'video' ? 'video' : 'image';
+          obj.srcData = typeof raw.srcData === 'string' ? raw.srcData : '';
+          obj.videoSound = !!raw.videoSound;
+          obj.videoVolume = typeof raw.videoVolume === 'number' ? raw.videoVolume : 1.0;
+          obj._wasPressed = false;
+          obj._activeUntil = 0;
+          obj._lastTriggerTime = 0;
+          obj._imgEl = null;
+          obj._videoEl = null;
+        }
+        loaded.push(obj);
+      }
+
+      gameObjects = loaded;
+      selectedObjId = null;
+      refreshHierarchy();
+      selectGameObject(null);
+      cameraX = 0; cameraY = 0; cameraZoom = 1.0;
+      renderScene();
+      clearConsole();
+      log(`已載入專案「${data.name || '未命名'}」，共 ${loaded.length} 個物件${skipped > 0 ? `（跳過 ${skipped} 個無效項）` : ''}`, 'sys');
+    }
+
+    function downloadProject() {
+      const data = {
+        name: 'My Game Project',
+        version: PROJECT_VERSION,
+        exportedAt: new Date().toISOString(),
+        objects: gameObjects.map(obj => {
+          const base = {
+            id: obj.id, parentId: obj.parentId, name: obj.name, nodeType: obj.nodeType,
+            x: obj.x, y: obj.y, width: obj.width, height: obj.height, color: obj.color,
+            locked: !!obj.locked, visible: obj.visible !== false,
+            cameraOffsetX: obj.cameraOffsetX || 0, cameraOffsetY: obj.cameraOffsetY || 0,
+            scriptText: obj.scriptText || ''
+          };
+          if (obj.nodeType === 'wasd') base.speed = obj.speed;
+          if (obj.nodeType === 'gravity') base.gravity = obj.gravity;
+          if (obj.nodeType === 'jump') base.jumpForce = obj.jumpForce;
+          if (obj.nodeType === 'bounce') { base.speedX = obj.speedX; base.speedY = obj.speedY; }
+          if (obj.nodeType === 'appearance') {
+            base.appCode = obj.appCode || '[]';
+            base.appKey = obj.appKey || '';
+            base.appDuration = obj.appDuration || 0;
+            base.srcType = obj.srcType || 'image';
+            base.srcData = obj.srcData || '';
+            base.videoSound = !!obj.videoSound;
+            base.videoVolume = obj.videoVolume ?? 1.0;
+          }
+          return base;
+        })
+      };
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.href = url;
+      a.download = `game-project-${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      log(`已下載專案，共 ${data.objects.length} 個物件`, 'sys');
+    }
+
+    // ============ 鍵盤 ============
+    window.addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        const target = e.target;
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') e.preventDefault();
+      }
+      const isInputFocused = document.activeElement &&
+        (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+
+      if (e.key === 'F2' && !isInputFocused) { e.preventDefault(); renameSelectedNode(); return; }
+      if (e.key === 'Escape') { selectGameObject(null); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); downloadProject(); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); openProject(); return; }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isInputFocused && selectedObjId) {
+        e.preventDefault(); deleteSelectedObject(); return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+        if (!isInputFocused && selectedObjId) { e.preventDefault(); duplicateSelectedObject(); return; }
+      }
+
+      if (!isInputFocused && !isPlaying) {
+        const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+        if (arrows.includes(e.key)) {
+          const obj = gameObjects.find(o => o.id === selectedObjId);
+          const canMoveObj = obj && !obj.locked && (obj.nodeType === 'rect' || obj.nodeType === 'shape_rect');
+          if (canMoveObj) {
+            e.preventDefault();
+            const step = e.shiftKey ? SNAP_SIZE : 1;
+            if (e.key === 'ArrowUp') obj.y -= step;
+            if (e.key === 'ArrowDown') obj.y += step;
+            if (e.key === 'ArrowLeft') obj.x -= step;
+            if (e.key === 'ArrowRight') obj.x += step;
+            document.getElementById('propX').value = obj.x;
+            document.getElementById('propY').value = obj.y;
+            renderScene();
+          } else {
+            e.preventDefault();
+            const step = CAM_STEP / cameraZoom;
+            if (e.key === 'ArrowUp') cameraY -= step;
+            if (e.key === 'ArrowDown') cameraY += step;
+            if (e.key === 'ArrowLeft') cameraX -= step;
+            if (e.key === 'ArrowRight') cameraX += step;
+            clampCamera();
+            renderScene();
+          }
+        }
+      }
+    });
+    window.addEventListener('keyup', e => keys[e.key] = false);
+
+    document.addEventListener('click', () => contextMenu.style.display = 'none');
+    document.addEventListener('contextmenu', (e) => {
+      if (!e.target.closest('#context-menu') && !e.target.closest('.tree-item')) {
+        contextMenu.style.display = 'none';
+      }
+    });
+
+    // ============ 滑鼠滾輪縮放 ============
+    canvas.addEventListener('wheel', (e) => {
+      if (isPlaying) return;
+      e.preventDefault();
+      const oldZoom = cameraZoom;
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, oldZoom * factor));
+      if (Math.abs(newZoom - oldZoom) < 0.0001) return;
+      const centerX = cameraX + (canvas.width / 2) / oldZoom;
+      const centerY = cameraY + (canvas.height / 2) / oldZoom;
+      cameraZoom = newZoom;
+      cameraX = centerX - (canvas.width / 2) / newZoom;
+      cameraY = centerY - (canvas.height / 2) / newZoom;
+      clampCamera();
+      renderScene();
+    }, { passive: false });
+
+    const Input = {
+      isKeyPressed: key => !!keys[key],
+      isAnyPressed: (...list) => list.some(k => !!keys[k])
+    };
+
+    function getGlobalPos(obj) {
+      let gx = obj.x, gy = obj.y;
+      let curr = obj;
+      let safety = 0;
+      while (curr.parentId && safety < 100) {
+        curr = gameObjects.find(o => o.id === curr.parentId);
+        if (curr) { gx += curr.x; gy += curr.y; }
+        else break;
+        safety++;
+      }
+      return { x: gx, y: gy };
+    }
+
+    function compileScript(obj) {
+      obj.runtime = obj.runtime || {};
+      obj.runtime.error = null;
+      if (!obj.scriptText || !obj.scriptText.trim()) { obj.runtime.onUpdate = null; return; }
+      try {
+        obj.runtime.onUpdate = new Function('self', 'dt', 'Input', 'canvas', 'log', 'gameObjects', obj.scriptText);
+      } catch (e) {
+        obj.runtime.onUpdate = null;
+        obj.runtime.error = e.message;
+        log(`[${obj.name}] 腳本編譯錯誤: ${e.message}`, 'error');
+      }
+    }
+
+    function findWorldBounds() {
+      for (const obj of gameObjects) {
+        const children = gameObjects.filter(c => c.parentId === obj.id);
+        if (children.some(c => c.nodeType === 'world_bounds')) return obj;
+      }
+      return null;
+    }
+
+    function findCameraFollow() {
+      for (const obj of gameObjects) {
+        const children = gameObjects.filter(c => c.parentId === obj.id);
+        const cam = children.find(c => c.nodeType === 'camera_follow');
+        if (cam) return { target: obj, comp: cam };
+      }
+      return null;
+    }
+
+    function getWorldSize() {
+      const wb = findWorldBounds();
+      if (wb) return { width: wb.width, height: wb.height };
+      return { width: canvas.width, height: canvas.height };
+    }
+
+    // ============ 初始化 ============
+    function init() {
+      const player = createNewObject(null, 'rect', 'Player', 80, 180, 40, 40, '#00e676');
+      createNewObject(player.id, 'wasd', 'WASD控制器');
+      createNewObject(player.id, 'wall_collider', '碰撞箱');
+      createNewObject(player.id, 'gravity', '重力組件');
+      createNewObject(player.id, 'jump', '跳躍組件');
+
+      const wall = createNewObject(null, 'rect', 'Wall', 280, 220, 120, 30, '#ff9800');
+      createNewObject(wall.id, 'wall_collider', '碰撞箱');
+
+      const floor = createNewObject(null, 'rect', 'Floor', 0, 310, 520, 30, '#555555');
+      createNewObject(floor.id, 'wall_collider', '碰撞箱');
+
+      selectGameObject(player.id);
+      renderScene();
+      log('引擎初始化完成。暫停時：方向鍵移動視角、滾輪縮放。', 'sys');
+    }
+
+    function createNewObject(parentId=null, nodeType='rect', name='Node', x=0, y=0, w=40, h=40, color='#47a3ff') {
+      const obj = {
+        id: Date.now() + Math.random(),
+        parentId, name, nodeType, x, y, width: w, height: h, color,
+        vx: 0, vy: 0, isGrounded: false, _prevJumpPressed: false,
+        locked: false, visible: true,
+        cameraOffsetX: 0, cameraOffsetY: 0,
+        scriptText: '', runtime: { onUpdate: null, error: null }
+      };
+      if (nodeType === 'wasd') obj.speed = 200;
+      if (nodeType === 'gravity') obj.gravity = 700;
+      if (nodeType === 'jump') obj.jumpForce = 350;
+      if (nodeType === 'bounce') { obj.speedX = 100; obj.speedY = 0; }
+      if (nodeType === 'camera_follow') { obj.width = 20; obj.height = 20; }
+      if (nodeType === 'appearance') {
+        obj.appCode = '[]';
+        obj.appKey = '';
+        obj.appDuration = 0;
+        obj.srcType = 'image';
+        obj.srcData = '';
+        obj.videoSound = false;
+        obj.videoVolume = 1.0;
+        obj._wasPressed = false;
+        obj._activeUntil = 0;
+        obj._lastTriggerTime = 0;
+        obj._imgEl = null;
+        obj._videoEl = null;
+      }
+      gameObjects.push(obj);
+      refreshHierarchy();
+      renderScene();
+      return obj;
+    }
+
+    function refreshHierarchy() {
+      const treeContainer = document.getElementById('object-tree');
+      treeContainer.innerHTML = '';
+
+      function buildTree(parentId, depth = 0) {
+        const children = gameObjects.filter(o => o.parentId === parentId);
+        children.forEach(obj => {
+          const item = document.createElement('div');
+          item.className = `tree-item ${obj.id === selectedObjId ? 'selected' : ''}`;
+          item.style.paddingLeft = `${depth * 15 + 8}px`;
+
+          let icon = '📦';
+          if (obj.nodeType === 'wall_collider' || obj.nodeType === 'char_collider') icon = '🧱';
+          if (obj.nodeType === 'wasd') icon = '🎮';
+          if (obj.nodeType === 'gravity') icon = '⚓';
+          if (obj.nodeType === 'jump') icon = '🐆';
+          if (obj.nodeType === 'bounce') icon = '⚡';
+          if (obj.nodeType === 'world_bounds') icon = '🗺️';
+          if (obj.nodeType === 'camera_follow') icon = '🎥';
+          if (obj.nodeType === 'appearance') icon = obj.srcData ? '🖼️' : '🎨';
+
+          const scriptTag = obj.scriptText && obj.scriptText.trim() ? ' 📜' : '';
+          const errTag = obj.runtime && obj.runtime.error ? ' ❗' : '';
+          const lockTag = obj.locked ? '<span class="tag-locked">🔒</span>' : '';
+          const hiddenTag = !obj.visible ? '<span class="tag-hidden">👁‍🗨</span>' : '';
+          const specialTag = (obj.nodeType === 'world_bounds' || obj.nodeType === 'camera_follow') ? '<span class="tag-special">★</span>' : '';
+          const appTag = obj.nodeType === 'appearance' ? `<span class="tag-special">${obj.appCode || '[]'}</span>` : '';
+          const soundTag = (obj.nodeType === 'appearance' && obj.videoSound) ? ' 🔊' : '';
+
+          item.innerHTML = `${depth > 0 ? '└─ ' : ''}${icon} ${obj.name}${scriptTag}${errTag}${specialTag}${appTag}${soundTag}${lockTag}${hiddenTag}`;
+          item.onclick = (e) => { e.stopPropagation(); selectGameObject(obj.id); };
+          item.oncontextmenu = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            selectGameObject(obj.id);
+            showContextMenu(e.clientX, e.clientY, obj.name);
+          };
+
+          treeContainer.appendChild(item);
+          buildTree(obj.id, depth + 1);
+        });
+      }
+      buildTree(null);
+    }
+
+    function showContextMenu(x, y, name) {
+      document.getElementById('menuTitle').textContent = `[${name}] 即時選項`;
+      const menuWidth = 240, menuHeight = 420;
+      let posX = x, posY = y;
+      if (posX + menuWidth > window.innerWidth) posX = window.innerWidth - menuWidth - 5;
+      if (posY + menuHeight > window.innerHeight) posY = window.innerHeight - menuHeight - 5;
+      contextMenu.style.left = `${posX}px`;
+      contextMenu.style.top = `${posY}px`;
+      contextMenu.style.display = 'block';
+    }
+
+    function parseAppCode(obj) {
+      const code = obj.appCode || '[]';
+      const match = code.match(/^\[([A-Za-z]?)(\d+(?:\.\d+)?)?\]$/);
+      if (!match) {
+        obj.appKey = '';
+        obj.appDuration = 0;
+        return false;
+      }
+      obj.appKey = match[1] || '';
+      obj.appDuration = match[2] ? parseFloat(match[2]) : 0;
+      return true;
+    }
+
+    function hideAllProps() {
+      const ids = ['props-main-group', 'props-wasd-group', 'props-gravity-group', 'props-jump-group',
+                   'props-bounce-group', 'props-collider-group', 'props-camera-group',
+                   'props-worldbounds-group', 'props-appearance-group'];
+      ids.forEach(id => { document.getElementById(id).style.display = 'none'; });
+    }
+
+    function updateWasdModeTip(obj) {
+      const parentId = obj.parentId;
+      const siblings = gameObjects.filter(c => c.parentId === parentId);
+      const hasGravity = siblings.some(c => c.nodeType === 'gravity');
+      const hasJump = siblings.some(c => c.nodeType === 'jump');
+      const tip = document.getElementById('wasdModeTip');
+      if (hasGravity || hasJump) {
+        tip.textContent = '模式：平台跳躍（左右移動）';
+        tip.style.color = '#81c784';
+      } else {
+        tip.textContent = '模式：俯視自由（上下左右）';
+        tip.style.color = '#4ec9b0';
+      }
+    }
+
+    function selectGameObject(id) {
+      selectedObjId = id;
+      refreshHierarchy();
+      const obj = gameObjects.find(o => o.id === id);
+
+      const content = document.getElementById('inspector-content');
+      const empty = document.getElementById('inspector-empty');
+
+      if (!obj) { content.style.display = 'none'; empty.style.display = 'block'; return; }
+
+      content.style.display = 'flex'; empty.style.display = 'none';
+      document.getElementById('propName').value = obj.name;
+
+      const typeNames = {
+        'rect': '主物件 (Rect)', 'shape_rect': '幾何子物件', 'wall_collider': '碰撞箱',
+        'char_collider': '碰撞箱', 'wasd': 'WASD 控制組件', 'gravity': '重力組件',
+        'jump': '跳躍組件', 'bounce': '邊界彈跳組件', 'world_bounds': '世界邊界組件',
+        'camera_follow': '攝影機跟隨組件', 'appearance': '外觀組件'
+      };
+      document.getElementById('propNodeTypeTip').textContent = `類型：${typeNames[obj.nodeType] || obj.nodeType}`;
+
+      hideAllProps();
+
+      if (obj.nodeType === 'rect' || obj.nodeType === 'shape_rect') {
+        document.getElementById('props-main-group').style.display = 'flex';
+        document.getElementById('propX').value = obj.x;
+        document.getElementById('propY').value = obj.y;
+        document.getElementById('propW').value = obj.width;
+        document.getElementById('propH').value = obj.height;
+        document.getElementById('propColor').value = obj.color;
+      } else if (obj.nodeType === 'wasd') {
+        document.getElementById('props-wasd-group').style.display = 'flex';
+        document.getElementById('propWasdSpeed').value = obj.speed || 200;
+        updateWasdModeTip(obj);
+      } else if (obj.nodeType === 'gravity') {
+        document.getElementById('props-gravity-group').style.display = 'flex';
+        document.getElementById('propGravity').value = obj.gravity || 700;
+      } else if (obj.nodeType === 'jump') {
+        document.getElementById('props-jump-group').style.display = 'flex';
+        document.getElementById('propJumpForce').value = obj.jumpForce || 350;
+      } else if (obj.nodeType === 'bounce') {
+        document.getElementById('props-bounce-group').style.display = 'flex';
+        document.getElementById('propBounceX').value = obj.speedX || 0;
+        document.getElementById('propBounceY').value = obj.speedY || 0;
+      } else if (obj.nodeType === 'wall_collider' || obj.nodeType === 'char_collider') {
+        document.getElementById('props-collider-group').style.display = 'flex';
+      } else if (obj.nodeType === 'camera_follow') {
+        document.getElementById('props-camera-group').style.display = 'flex';
+        document.getElementById('propCamOffX').value = obj.cameraOffsetX || 0;
+        document.getElementById('propCamOffY').value = obj.cameraOffsetY || 0;
+      } else if (obj.nodeType === 'world_bounds') {
+        document.getElementById('props-worldbounds-group').style.display = 'flex';
+      } else if (obj.nodeType === 'appearance') {
+        document.getElementById('props-appearance-group').style.display = 'flex';
+        document.getElementById('propAppCode').value = obj.appCode || '[]';
+        document.getElementById('propAppSrcType').value = obj.srcType || 'image';
+        const soundSection = document.getElementById('videoSoundSection');
+        if (obj.srcType === 'video') {
+          soundSection.style.display = 'flex';
+          document.getElementById('propVideoSound').checked = !!obj.videoSound;
+          const vol = obj.videoVolume ?? 1.0;
+          document.getElementById('propVideoVolume').value = vol;
+          document.getElementById('propVideoVolumeVal').textContent = Math.round(vol * 100) + '%';
+        } else {
+          soundSection.style.display = 'none';
+        }
+        updateAppearancePreview(obj);
+        updateAppParsedHint(obj);
+      }
+
+      document.getElementById('scriptEditor').value = obj.scriptText || '';
+      updateLockButton();
+      updateVisibleButton();
+      renderScene();
+    }
+
+    function updateAppParsedHint(obj) {
+      const key = obj.appKey || '預設';
+      const dur = obj.appDuration > 0 ? `${obj.appDuration} 秒` : '無限';
+      document.getElementById('app-parsed').textContent = `鍵=${key}, 時間=${dur}`;
+    }
+
+    function updateAppearancePreview(obj) {
+      const box = document.getElementById('app-preview');
+      if (!obj.srcData) { box.textContent = '尚未上傳檔案'; return; }
+      if (obj.srcType === 'video') {
+        box.innerHTML = `<video src="${obj.srcData}" muted autoplay loop playsinline></video>`;
+      } else {
+        box.innerHTML = `<img src="${obj.srcData}">`;
+      }
+    }
+
+    function updateLockButton() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      const btn = document.getElementById('lockBtn');
+      if (!btn || !obj) return;
+      if (obj.locked) { btn.textContent = '🔒 已鎖定'; btn.classList.add('active'); }
+      else { btn.textContent = '🔓 未鎖定'; btn.classList.remove('active'); }
+    }
+
+    function updateVisibleButton() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      const btn = document.getElementById('visibleBtn');
+      if (!btn || !obj) return;
+      if (obj.visible) { btn.textContent = '👁 可見'; btn.classList.remove('active'); }
+      else { btn.textContent = '👁‍🗨 隱藏'; btn.classList.add('active'); }
+    }
+
+    function toggleLock() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+      obj.locked = !obj.locked;
+      updateLockButton();
+      refreshHierarchy();
+    }
+
+    function toggleVisible() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+      obj.visible = !obj.visible;
+      updateVisibleButton();
+      refreshHierarchy();
+      renderScene();
+    }
+
+    function updateCommonProps() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+      obj.name = document.getElementById('propName').value;
+      refreshHierarchy();
+    }
+
+    function updateCurrentObj() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+      if (obj.nodeType !== 'rect' && obj.nodeType !== 'shape_rect') return;
+      obj.x = parseFloat(document.getElementById('propX').value) || 0;
+      obj.y = parseFloat(document.getElementById('propY').value) || 0;
+      obj.width = parseFloat(document.getElementById('propW').value) || 10;
+      obj.height = parseFloat(document.getElementById('propH').value) || 10;
+      obj.color = document.getElementById('propColor').value;
+      if (!isPlaying) renderScene();
+    }
+
+    function updateComponentProp() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+
+      if (obj.nodeType === 'wasd') obj.speed = parseFloat(document.getElementById('propWasdSpeed').value) || 200;
+      else if (obj.nodeType === 'gravity') obj.gravity = parseFloat(document.getElementById('propGravity').value) || 700;
+      else if (obj.nodeType === 'jump') obj.jumpForce = parseFloat(document.getElementById('propJumpForce').value) || 350;
+      else if (obj.nodeType === 'bounce') {
+        obj.speedX = parseFloat(document.getElementById('propBounceX').value) || 0;
+        obj.speedY = parseFloat(document.getElementById('propBounceY').value) || 0;
+      }
+      else if (obj.nodeType === 'camera_follow') {
+        obj.cameraOffsetX = parseFloat(document.getElementById('propCamOffX').value) || 0;
+        obj.cameraOffsetY = parseFloat(document.getElementById('propCamOffY').value) || 0;
+      }
+      else if (obj.nodeType === 'appearance') {
+        obj.appCode = document.getElementById('propAppCode').value || '[]';
+        obj.srcType = document.getElementById('propAppSrcType').value || 'image';
+        obj.videoSound = document.getElementById('propVideoSound').checked;
+        obj.videoVolume = parseFloat(document.getElementById('propVideoVolume').value);
+        if (isNaN(obj.videoVolume)) obj.videoVolume = 1.0;
+        document.getElementById('propVideoVolumeVal').textContent = Math.round(obj.videoVolume * 100) + '%';
+
+        if (obj._videoEl) {
+          const shouldHaveSound = isPlaying && obj.videoSound && audioUnlocked;
+          if (shouldHaveSound) {
+            obj._videoEl.muted = false;
+            obj._videoEl.volume = obj.videoVolume;
+          } else {
+            obj._videoEl.muted = true;
+          }
+        }
+
+        const ok = parseAppCode(obj);
+        if (!ok) {
+          document.getElementById('app-parsed').textContent = '⚠️ 代碼格式錯誤，請用 [W1] 或 [] 的形式';
+        } else {
+          updateAppParsedHint(obj);
+        }
+        updateAppearancePreview(obj);
+        refreshHierarchy();
+      }
+      if (!isPlaying) renderScene();
+    }
+
+    function updateScript() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+      const newScript = document.getElementById('scriptEditor').value;
+      if (newScript !== obj.scriptText) {
+        obj.scriptText = newScript;
+        compileScript(obj);
+        refreshHierarchy();
+      }
+    }
+
+    function uploadAppearanceFile() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj || obj.nodeType !== 'appearance') return;
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,video/*';
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          if (obj._videoEl) {
+            try { obj._videoEl.pause(); obj._videoEl.src = ''; } catch(e){}
+            obj._videoEl = null;
+          }
+          obj._imgEl = null;
+          obj.srcData = evt.target.result;
+          obj.srcType = file.type.startsWith('video') ? 'video' : 'image';
+          document.getElementById('propAppSrcType').value = obj.srcType;
+          const soundSection = document.getElementById('videoSoundSection');
+          soundSection.style.display = obj.srcType === 'video' ? 'flex' : 'none';
+          updateAppearancePreview(obj);
+          refreshHierarchy();
+          renderScene();
+          log(`已載入外觀檔案：${file.name}（${(file.size / 1024).toFixed(1)} KB）`, 'sys');
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    }
+
+    function addNodeComponent(type) {
+      if (!selectedObjId) return;
+      const parent = gameObjects.find(o => o.id === selectedObjId);
+      if (!parent) return;
+      const names = {
+        'wall_collider': '碰撞箱', 'char_collider': '碰撞箱',
+        'wasd': 'WASD控制器', 'gravity': '重力組件',
+        'jump': '跳躍組件', 'bounce': '邊界彈跳', 'shape_rect': '子矩形',
+        'world_bounds': '世界邊界', 'camera_follow': '攝影機跟隨',
+        'appearance': '外觀'
+      };
+      const newNode = createNewObject(selectedObjId, type, names[type] || type, 0, 0,
+        (type === 'world_bounds' || type === 'camera_follow' || type === 'appearance') ? 20 : parent.width,
+        (type === 'world_bounds' || type === 'camera_follow' || type === 'appearance') ? 20 : parent.height,
+        parent.color);
+
+      if (type === 'world_bounds') log(`「${parent.name}」已設為世界邊界，世界大小 = ${parent.width} × ${parent.height}`, 'sys');
+      else if (type === 'camera_follow') log(`攝影機將跟隨「${parent.name}」`, 'sys');
+      else if (type === 'appearance') log(`已為「${parent.name}」新增外觀，請上傳圖片/影片並設定代碼。`, 'sys');
+      else if (type === 'wasd') { if (selectedObjId) selectGameObject(selectedObjId); }
+    }
+
+    function renameSelectedNode() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+      const newName = prompt("請輸入新名稱:", obj.name);
+      if (newName) { obj.name = newName; refreshHierarchy(); selectGameObject(obj.id); }
+    }
+
+    function focusScriptEditor() { document.getElementById('scriptEditor').focus(); }
+
+    function deleteSelectedObject() {
+      if (!selectedObjId) return;
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+      function getIdsToDelete(id) {
+        let ids = [id];
+        gameObjects.filter(o => o.parentId === id).forEach(child => { ids = ids.concat(getIdsToDelete(child.id)); });
+        return ids;
+      }
+      const toDelete = getIdsToDelete(selectedObjId);
+      gameObjects.forEach(o => {
+        if (toDelete.includes(o.id) && o.nodeType === 'appearance' && o._videoEl) {
+          try { o._videoEl.pause(); o._videoEl.src = ''; } catch(e){}
+        }
+      });
+      gameObjects = gameObjects.filter(o => !toDelete.includes(o.id));
+      selectedObjId = null;
+      selectGameObject(null);
+      refreshHierarchy();
+      renderScene();
+      log(`已刪除「${obj.name}」`, 'sys');
+    }
+
+    function duplicateSelectedObject() {
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj) return;
+      const idMap = new Map();
+      function collectAll(rootId) {
+        const result = [rootId];
+        gameObjects.filter(c => c.parentId === rootId).forEach(child => { result.push(...collectAll(child.id)); });
+        return result;
+      }
+      const allIds = collectAll(obj.id);
+      allIds.forEach(oldId => idMap.set(oldId, Date.now() + Math.random()));
+
+      allIds.forEach(oldId => {
+        const source = gameObjects.find(o => o.id === oldId);
+        let newParentId = source.parentId;
+        if (idMap.has(source.parentId)) newParentId = idMap.get(source.parentId);
+        const newObj = {
+          ...source,
+          id: idMap.get(oldId),
+          parentId: newParentId,
+          x: oldId === obj.id ? source.x + 20 : source.x,
+          y: oldId === obj.id ? source.y + 20 : source.y,
+          vx: 0, vy: 0, isGrounded: false, _prevJumpPressed: false,
+          runtime: { onUpdate: null, error: null }
+        };
+        if (newObj.nodeType === 'appearance') {
+          newObj._imgEl = null;
+          newObj._videoEl = null;
+          newObj._wasPressed = false;
+          newObj._activeUntil = 0;
+          newObj._lastTriggerTime = 0;
+        }
+        gameObjects.push(newObj);
+      });
+
+      const newRootId = idMap.get(obj.id);
+      selectGameObject(newRootId);
+      refreshHierarchy();
+      renderScene();
+      log(`已複製「${obj.name}」`, 'sys');
+    }
+
+    function getCanvasMouse(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+    }
+
+    function getWorldMouse(e) {
+      const c = getCanvasMouse(e);
+      return { x: c.x / cameraZoom + cameraX, y: c.y / cameraZoom + cameraY };
+    }
+
+    function getHandles(obj) {
+      const pos = getGlobalPos(obj);
+      const x = pos.x, y = pos.y, w = obj.width, h = obj.height;
+      return {
+        nw: { x: x, y: y }, n: { x: x + w/2, y: y }, ne: { x: x + w, y: y },
+        e: { x: x + w, y: y + h/2 }, se: { x: x + w, y: y + h },
+        s: { x: x + w/2, y: y + h }, sw: { x: x, y: y + h }, w: { x: x, y: y + h/2 }
+      };
+    }
+
+    function hitHandle(wx, wy) {
+      if (!selectedObjId) return null;
+      const obj = gameObjects.find(o => o.id === selectedObjId);
+      if (!obj || obj.locked) return null;
+      if (obj.nodeType !== 'rect' && obj.nodeType !== 'shape_rect') return null;
+      const handles = getHandles(obj);
+      const hitRange = HANDLE_SIZE / cameraZoom;
+      const order = ['nw', 'ne', 'se', 'sw', 'n', 'e', 's', 'w'];
+      for (const name of order) {
+        const h = handles[name];
+        if (Math.abs(wx - h.x) <= hitRange && Math.abs(wy - h.y) <= hitRange) return name;
+      }
+      return null;
+    }
+
+    function hitTest(wx, wy) {
+      for (let i = gameObjects.length - 1; i >= 0; i--) {
+        const obj = gameObjects[i];
+        if (obj.nodeType !== 'rect' && obj.nodeType !== 'shape_rect') continue;
+        if (!obj.visible) continue;
+        const pos = getGlobalPos(obj);
+        if (wx >= pos.x && wx <= pos.x + obj.width && wy >= pos.y && wy <= pos.y + obj.height) return obj;
+      }
+      return null;
+    }
+
+    function handleCursor(handle) {
+      const map = {
+        nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
+        n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize'
+      };
+      return map[handle] || 'default';
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (isPlaying) return;
+      if (e.button !== 0) return;
+      const wm = getWorldMouse(e);
+      const cm = getCanvasMouse(e);
+
+      const handleHit = hitHandle(wm.x, wm.y);
+      if (handleHit) {
+        const obj = gameObjects.find(o => o.id === selectedObjId);
+        isResizing = true; resizeHandle = handleHit;
+        resizeStartMouse = { x: wm.x, y: wm.y };
+        resizeStartObj = { x: obj.x, y: obj.y, width: obj.width, height: obj.height };
+        canvas.style.cursor = handleCursor(handleHit);
+        e.preventDefault(); return;
+      }
+
+      const hit = hitTest(wm.x, wm.y);
+      if (hit) {
+        selectGameObject(hit.id);
+        if (hit.locked) return;
+        isDragging = true; dragTargetId = hit.id;
+        const pos = getGlobalPos(hit);
+        dragOffset.x = wm.x - pos.x; dragOffset.y = wm.y - pos.y;
+        canvas.style.cursor = 'grabbing';
+        e.preventDefault();
+      } else {
+        isPanning = true;
+        panStart = { x: cm.x, y: cm.y };
+        panStartCamera = { x: cameraX, y: cameraY };
+        panMoved = false;
+        canvas.style.cursor = 'grabbing';
+        e.preventDefault();
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (isPlaying) return;
+      const wm = getWorldMouse(e);
+      const cm = getCanvasMouse(e);
+
+      if (isResizing && resizeHandle) {
+        const obj = gameObjects.find(o => o.id === selectedObjId);
+        if (!obj) return;
+        const dx = wm.x - resizeStartMouse.x, dy = wm.y - resizeStartMouse.y;
+        let newX = resizeStartObj.x, newY = resizeStartObj.y;
+        let newW = resizeStartObj.width, newH = resizeStartObj.height;
+        if (resizeHandle.includes('w')) { newX = resizeStartObj.x + dx; newW = resizeStartObj.width - dx; }
+        else if (resizeHandle.includes('e')) { newW = resizeStartObj.width + dx; }
+        if (resizeHandle.includes('n')) { newY = resizeStartObj.y + dy; newH = resizeStartObj.height - dy; }
+        else if (resizeHandle.includes('s')) { newH = resizeStartObj.height + dy; }
+
+        if (e.shiftKey) {
+          newX = Math.round(newX / SNAP_SIZE) * SNAP_SIZE;
+          newY = Math.round(newY / SNAP_SIZE) * SNAP_SIZE;
+          newW = Math.round(newW / SNAP_SIZE) * SNAP_SIZE;
+          newH = Math.round(newH / SNAP_SIZE) * SNAP_SIZE;
+        }
+        if (newW < MIN_SIZE) { if (resizeHandle.includes('w')) newX = resizeStartObj.x + resizeStartObj.width - MIN_SIZE; newW = MIN_SIZE; }
+        if (newH < MIN_SIZE) { if (resizeHandle.includes('n')) newY = resizeStartObj.y + resizeStartObj.height - MIN_SIZE; newH = MIN_SIZE; }
+
+        obj.x = Math.round(newX); obj.y = Math.round(newY);
+        obj.width = Math.round(newW); obj.height = Math.round(newH);
+        document.getElementById('propX').value = obj.x;
+        document.getElementById('propY').value = obj.y;
+        document.getElementById('propW').value = obj.width;
+        document.getElementById('propH').value = obj.height;
+        canvas.style.cursor = handleCursor(resizeHandle);
+        renderScene(); return;
+      }
+
+      if (isDragging && dragTargetId) {
+        const obj = gameObjects.find(o => o.id === dragTargetId);
+        if (!obj) return;
+        const pos = getGlobalPos(obj);
+        const parentOffsetX = pos.x - obj.x, parentOffsetY = pos.y - obj.y;
+        let newX = wm.x - dragOffset.x - parentOffsetX;
+        let newY = wm.y - dragOffset.y - parentOffsetY;
+        if (e.shiftKey) {
+          newX = Math.round(newX / SNAP_SIZE) * SNAP_SIZE;
+          newY = Math.round(newY / SNAP_SIZE) * SNAP_SIZE;
+        }
+        obj.x = Math.round(newX); obj.y = Math.round(newY);
+        if (selectedObjId === obj.id) {
+          document.getElementById('propX').value = obj.x;
+          document.getElementById('propY').value = obj.y;
+        }
+        renderScene(); return;
+      }
+
+      if (isPanning) {
+        const dx = (cm.x - panStart.x) / cameraZoom;
+        const dy = (cm.y - panStart.y) / cameraZoom;
+        if (Math.abs(dx) > 2 || Math.abs(dy) > 2) panMoved = true;
+        cameraX = panStartCamera.x - dx;
+        cameraY = panStartCamera.y - dy;
+        clampCamera();
+        renderScene(); return;
+      }
+
+      const handleHit = hitHandle(wm.x, wm.y);
+      if (handleHit) { canvas.style.cursor = handleCursor(handleHit); return; }
+      const hit = hitTest(wm.x, wm.y);
+      if (hit && hit.locked) canvas.style.cursor = 'not-allowed';
+      else canvas.style.cursor = 'grab';
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDragging || isResizing) {
+        isDragging = false; isResizing = false;
+        dragTargetId = null; resizeHandle = null;
+        canvas.style.cursor = 'default';
+      }
+      if (isPanning) {
+        if (!panMoved) selectGameObject(null);
+        isPanning = false; canvas.style.cursor = 'default';
+      }
+    });
+
+    function toggleGrid() {
+      showGrid = !showGrid;
+      document.getElementById('gridToggle').classList.toggle('active', showGrid);
+      renderScene();
+    }
+
+    function resetCamera() {
+      cameraX = 0; cameraY = 0; cameraZoom = 1.0;
+      renderScene();
+    }
+
+    function saveSnapshot() {
+      playSnapshot = gameObjects.map(obj => ({
+        id: obj.id, parentId: obj.parentId, name: obj.name, nodeType: obj.nodeType,
+        x: obj.x, y: obj.y, width: obj.width, height: obj.height, color: obj.color,
+        vx: 0, vy: 0, isGrounded: false, _prevJumpPressed: false,
+        locked: obj.locked, visible: obj.visible,
+        cameraOffsetX: obj.cameraOffsetX, cameraOffsetY: obj.cameraOffsetY,
+        speed: obj.speed, gravity: obj.gravity, jumpForce: obj.jumpForce,
+        speedX: obj.speedX, speedY: obj.speedY,
+        appCode: obj.appCode, appKey: obj.appKey, appDuration: obj.appDuration,
+        srcType: obj.srcType, srcData: obj.srcData,
+        videoSound: obj.videoSound, videoVolume: obj.videoVolume,
+        scriptText: obj.scriptText,
+        runtime: { onUpdate: obj.runtime ? obj.runtime.onUpdate : null, error: null }
+      }));
+    }
+
+    function restoreSnapshot() {
+      if (!playSnapshot) return;
+      gameObjects.forEach(obj => {
+        if (obj.nodeType === 'appearance' && obj._videoEl) {
+          try { obj._videoEl.pause(); } catch(e){}
+        }
+      });
+      gameObjects = playSnapshot.map(obj => {
+        const newObj = {
+          ...obj,
+          runtime: { onUpdate: obj.runtime.onUpdate, error: null }
+        };
+        if (newObj.nodeType === 'appearance') {
+          newObj._wasPressed = false;
+          newObj._activeUntil = 0;
+          newObj._lastTriggerTime = 0;
+          newObj._imgEl = null;
+          newObj._videoEl = null;
+        }
+        return newObj;
+      });
+      refreshHierarchy();
+      if (selectedObjId && !gameObjects.find(o => o.id === selectedObjId)) {
+        selectedObjId = null; selectGameObject(null);
+      } else {
+        const current = gameObjects.find(o => o.id === selectedObjId);
+        if (current) selectGameObject(current.id);
+      }
+    }
+
+    // ⭐ 影片媒體：依代碼時長決定循環 / 單次播放
+    function getAppearanceMedia(app) {
+      if (!app.srcData) return null;
+      if (app.srcType === 'video') {
+        if (!app._videoEl) {
+          app._videoEl = document.createElement('video');
+          app._videoEl.src = app.srcData;
+          app._videoEl.playsInline = true;
+          app._videoEl.muted = true;
+        }
+
+        const now = performance.now();
+        const isDefault = !app.appKey;
+        const isActive = isDefault || (app._activeUntil > now);
+
+        if (!isPlaying || !isActive) {
+          if (!app._videoEl.paused) {
+            try { app._videoEl.pause(); } catch(e){}
+          }
+          app._videoEl.muted = true;
+        } else {
+          // 有時長（[W1]）→ 只播一次；無時長（[W]、[]）→ 循環
+          app._videoEl.loop = (app.appDuration === 0);
+
+          if (app._videoEl.paused) {
+            app._videoEl.play().catch(()=>{});
+          }
+
+          const shouldHaveSound = app.videoSound && audioUnlocked;
+          if (shouldHaveSound) {
+            if (app._videoEl.muted) app._videoEl.muted = false;
+            const vol = Math.max(0, Math.min(1, app.videoVolume ?? 1));
+            if (Math.abs(app._videoEl.volume - vol) > 0.01) app._videoEl.volume = vol;
+          } else {
+            if (!app._videoEl.muted) app._videoEl.muted = true;
+          }
+        }
+
+        if (app._videoEl.readyState >= 2) return app._videoEl;
+        return null;
+      } else {
+        if (!app._imgEl) {
+          app._imgEl = new Image();
+          app._imgEl.src = app.srcData;
+        }
+        if (app._imgEl.complete && app._imgEl.naturalWidth > 0) return app._imgEl;
+        return null;
+      }
+    }
+
+    // ⭐ 外觀更新：時間到 → 影片暫停 + 靜音
+    function updateAppearances() {
+      const now = performance.now();
+      gameObjects.forEach(obj => {
+        if (obj.nodeType !== 'appearance') return;
+        if (!obj.appKey) return;
+        const key = obj.appKey;
+        const isPressed = keys[key] || keys[key.toLowerCase()] || keys[key.toUpperCase()];
+
+        if (isPressed && !obj._wasPressed) {
+          if (obj.appDuration > 0) {
+            obj._activeUntil = now + obj.appDuration * 1000;
+          } else {
+            obj._activeUntil = Infinity;
+          }
+          obj._lastTriggerTime = now;
+
+          // 影片從頭開始
+          if (obj.srcType === 'video' && obj._videoEl) {
+            try { obj._videoEl.currentTime = 0; } catch(e){}
+          }
+        }
+        obj._wasPressed = isPressed;
+
+        // 過期檢查：時間到 → 影片暫停、靜音
+        if (obj.srcType === 'video' && obj._videoEl) {
+          const hasExpired = obj._activeUntil &&
+                             obj._activeUntil !== Infinity &&
+                             obj._activeUntil <= now;
+          if (hasExpired && !obj._videoEl.paused) {
+            try { obj._videoEl.pause(); } catch(e){}
+            obj._videoEl.muted = true;
+          }
+        }
+      });
+    }
+
+    function getActiveAppearance(parentObj) {
+      const apps = gameObjects.filter(c => c.parentId === parentObj.id && c.nodeType === 'appearance');
+      if (apps.length === 0) return null;
+      const now = performance.now();
+      let best = null, bestTime = -1;
+      for (const app of apps) {
+        if (!app.appKey) continue;
+        if (app._activeUntil > now && (app._lastTriggerTime || 0) > bestTime) {
+          bestTime = app._lastTriggerTime;
+          best = app;
+        }
+      }
+      if (best) return best;
+      return apps.find(a => !a.appKey) || null;
+    }
+
+    function processNodeBehaviors(delta) {
+      const ws = getWorldSize();
+      worldWidth = ws.width; worldHeight = ws.height;
+
+      const cam = findCameraFollow();
+      if (cam) {
+        const pos = getGlobalPos(cam.target);
+        const offX = parseFloat(cam.comp.cameraOffsetX) || 0;
+        const offY = parseFloat(cam.comp.cameraOffsetY) || 0;
+        const viewW = canvas.width / cameraZoom;
+        const viewH = canvas.height / cameraZoom;
+        cameraX = pos.x + cam.target.width / 2 - viewW / 2 + offX;
+        cameraY = pos.y + cam.target.height / 2 - viewH / 2 + offY;
+        clampCamera();
+      } else { cameraX = 0; cameraY = 0; }
+
+      updateAppearances();
+
+      gameObjects.forEach(obj => {
+        const children = gameObjects.filter(c => c.parentId === obj.id);
+        const wasdComp = children.find(c => c.nodeType === 'wasd');
+        if (wasdComp) {
+          const speed = wasdComp.speed || 200;
+          const hasGravity = children.some(c => c.nodeType === 'gravity');
+          const hasJump = children.some(c => c.nodeType === 'jump');
+          const platformMode = hasGravity || hasJump;
+          if (Input.isAnyPressed('d', 'D', 'ArrowRight')) obj.vx = speed;
+          else if (Input.isAnyPressed('a', 'A', 'ArrowLeft')) obj.vx = -speed;
+          else obj.vx = 0;
+          if (!platformMode) {
+            if (Input.isAnyPressed('s', 'S', 'ArrowDown')) obj.vy = speed;
+            else if (Input.isAnyPressed('w', 'W', 'ArrowUp')) obj.vy = -speed;
+            else obj.vy = 0;
+          }
+        }
+      });
+
+      gameObjects.forEach(obj => {
+        const children = gameObjects.filter(c => c.parentId === obj.id);
+        const gravComp = children.find(c => c.nodeType === 'gravity');
+        if (gravComp) {
+          const g = gravComp.gravity || 700;
+          obj.vy = (obj.vy || 0) + g * delta;
+          if (obj.vy > 900) obj.vy = 900;
+        }
+      });
+
+      gameObjects.forEach(obj => {
+        const children = gameObjects.filter(c => c.parentId === obj.id);
+        const jumpComp = children.find(c => c.nodeType === 'jump');
+        if (jumpComp) {
+          const force = jumpComp.jumpForce || 350;
+          const jumpPressed = Input.isAnyPressed(' ', 'w', 'W', 'ArrowUp');
+          if (jumpPressed && !obj._prevJumpPressed && obj.isGrounded) {
+            obj.vy = -force;
+            obj.isGrounded = false;
+          }
+          obj._prevJumpPressed = jumpPressed;
+        } else { obj._prevJumpPressed = false; }
+      });
+
+      gameObjects.forEach(obj => {
+        const children = gameObjects.filter(c => c.parentId === obj.id);
+        const hasPhysics = children.some(c => c.nodeType === 'gravity' || c.nodeType === 'wasd');
+        if (hasPhysics) {
+          obj.x += (obj.vx || 0) * delta;
+          obj.y += (obj.vy || 0) * delta;
+        }
+      });
+
+      gameObjects.forEach(obj => {
+        if (obj.runtime && obj.runtime.onUpdate) {
+          try {
+            obj.runtime.onUpdate.call(obj, obj, delta, Input, canvas, log, gameObjects);
+          } catch (e) {
+            if (!obj.runtime.error) {
+              obj.runtime.error = e.message;
+              log(`[${obj.name}] 腳本執行錯誤: ${e.message}`, 'error');
+              refreshHierarchy();
+            }
+          }
+        }
+      });
+
+      const collidables = [];
+      gameObjects.forEach(obj => {
+        const children = gameObjects.filter(c => c.parentId === obj.id);
+        const hasCollider = children.some(c => c.nodeType === 'wall_collider' || c.nodeType === 'char_collider');
+        if (!hasCollider) return;
+        const isDynamic = children.some(c => c.nodeType === 'gravity' || c.nodeType === 'wasd' || c.nodeType === 'bounce');
+        collidables.push({ obj, isDynamic });
+      });
+
+      collidables.forEach(c => { c.obj.isGrounded = false; });
+
+      for (let iter = 0; iter < 2; iter++) {
+        for (let i = 0; i < collidables.length; i++) {
+          for (let j = i + 1; j < collidables.length; j++) {
+            const A = collidables[i], B = collidables[j];
+            if (A.obj.parentId === B.obj.id || B.obj.parentId === A.obj.id) continue;
+            if (!A.isDynamic && !B.isDynamic) continue;
+            let moveA, moveB;
+            if (A.isDynamic && B.isDynamic) { moveA = 0.5; moveB = 0.5; }
+            else if (A.isDynamic) { moveA = 1; moveB = 0; }
+            else { moveA = 0; moveB = 1; }
+
+            const posA = getGlobalPos(A.obj), posB = getGlobalPos(B.obj);
+            if (posA.x < posB.x + B.obj.width && posA.x + A.obj.width > posB.x &&
+                posA.y < posB.y + B.obj.height && posA.y + A.obj.height > posB.y) {
+              const overlapLeft = (posA.x + A.obj.width) - posB.x;
+              const overlapRight = (posB.x + B.obj.width) - posA.x;
+              const overlapTop = (posA.y + A.obj.height) - posB.y;
+              const overlapBottom = (posB.y + B.obj.height) - posA.y;
+              const minOverlapX = Math.min(overlapLeft, overlapRight);
+              const minOverlapY = Math.min(overlapTop, overlapBottom);
+
+              if (minOverlapX < minOverlapY) {
+                if (overlapLeft < overlapRight) { A.obj.x -= minOverlapX * moveA; B.obj.x += minOverlapX * moveB; }
+                else { A.obj.x += minOverlapX * moveA; B.obj.x -= minOverlapX * moveB; }
+                if (moveA > 0) A.obj.vx = 0;
+                if (moveB > 0) B.obj.vx = 0;
+              } else {
+                if (overlapTop < overlapBottom) {
+                  A.obj.y -= minOverlapY * moveA; B.obj.y += minOverlapY * moveB;
+                  if (moveA > 0) { A.obj.vy = Math.min(0, A.obj.vy); A.obj.isGrounded = true; }
+                  if (moveB > 0) { B.obj.vy = Math.max(0, B.obj.vy); B.obj.isGrounded = true; }
+                } else {
+                  A.obj.y += minOverlapY * moveA; B.obj.y -= minOverlapY * moveB;
+                  if (moveA > 0) A.obj.vy = Math.max(0, A.obj.vy);
+                  if (moveB > 0) B.obj.vy = Math.min(0, B.obj.vy);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      gameObjects.forEach(obj => {
+        const children = gameObjects.filter(c => c.parentId === obj.id);
+        const hasPhysics = children.some(c => c.nodeType === 'gravity' || c.nodeType === 'wasd');
+        if (!hasPhysics) return;
+        const hasBounce = children.some(c => c.nodeType === 'bounce');
+        const bounceComp = children.find(c => c.nodeType === 'bounce');
+
+        if (hasBounce) {
+          if (obj.x < 0) { obj.x = 0; obj.vx = Math.abs(obj.vx || 0) || (bounceComp.speedX || 100); }
+          if (obj.x + obj.width > worldWidth) { obj.x = worldWidth - obj.width; obj.vx = -(Math.abs(obj.vx || 0) || (bounceComp.speedX || 100)); }
+          if (obj.y < 0) { obj.y = 0; obj.vy = Math.abs(obj.vy || 0) || (bounceComp.speedY || 0); }
+          if (obj.y + obj.height > worldHeight) { obj.y = worldHeight - obj.height; obj.vy = -(Math.abs(obj.vy || 0) || (bounceComp.speedY || 0)); }
+        } else {
+          if (obj.x < 0) { obj.x = 0; obj.vx = 0; }
+          if (obj.x + obj.width > worldWidth) { obj.x = worldWidth - obj.width; obj.vx = 0; }
+          if (obj.y < 0) { obj.y = 0; obj.vy = 0; }
+          if (obj.y + obj.height > worldHeight) {
+            obj.y = worldHeight - obj.height; obj.vy = 0; obj.isGrounded = true;
+          }
+        }
+      });
+    }
+
+    function renderScene() {
+      ctx.fillStyle = '#121212';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.scale(cameraZoom, cameraZoom);
+
+      const viewW = canvas.width / cameraZoom;
+      const viewH = canvas.height / cameraZoom;
+
+      if (showGrid && !isPlaying) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.lineWidth = 1 / cameraZoom;
+        const worldRight = cameraX + viewW;
+        const worldBottom = cameraY + viewH;
+        const firstX = Math.floor(cameraX / GRID_SIZE) * GRID_SIZE;
+        const firstY = Math.floor(cameraY / GRID_SIZE) * GRID_SIZE;
+        for (let wx = firstX; wx <= worldRight; wx += GRID_SIZE) {
+          const sx = wx - cameraX;
+          ctx.beginPath();
+          ctx.moveTo(sx, 0);
+          ctx.lineTo(sx, viewH);
+          ctx.stroke();
+        }
+        for (let wy = firstY; wy <= worldBottom; wy += GRID_SIZE) {
+          const sy = wy - cameraY;
+          ctx.beginPath();
+          ctx.moveTo(0, sy);
+          ctx.lineTo(viewW, sy);
+          ctx.stroke();
+        }
+      }
+
+      gameObjects.forEach(obj => {
+        if (!obj.visible) return;
+        if (obj.nodeType !== 'rect' && obj.nodeType !== 'shape_rect') return;
+        const pos = getGlobalPos(obj);
+        const sx = pos.x - cameraX;
+        const sy = pos.y - cameraY;
+        if (sx + obj.width < 0 || sy + obj.height < 0 || sx > viewW || sy > viewH) return;
+
+        let drewAppearance = false;
+        if (obj.visible) {
+          const app = getActiveAppearance(obj);
+          if (app && app.srcData) {
+            const media = getAppearanceMedia(app);
+            if (media) {
+              try {
+                ctx.drawImage(media, sx, sy, obj.width, obj.height);
+                drewAppearance = true;
+              } catch (err) {}
+            }
+          }
+        }
+        if (!drewAppearance) {
+          ctx.fillStyle = obj.color;
+          ctx.fillRect(sx, sy, obj.width, obj.height);
+        }
+      });
+
+      if (!isPlaying) {
+        const wb = findWorldBounds();
+        if (wb) {
+          const sx = -cameraX, sy = -cameraY;
+          ctx.strokeStyle = '#4ec9b0';
+          ctx.lineWidth = 2 / cameraZoom;
+          ctx.setLineDash([8 / cameraZoom, 6 / cameraZoom]);
+          ctx.strokeRect(sx, sy, wb.width, wb.height);
+          ctx.setLineDash([]);
+          ctx.fillStyle = '#4ec9b0';
+          ctx.font = `${11 / cameraZoom}px Consolas`;
+          ctx.fillText(`🗺️ 世界邊界 ${wb.width}×${wb.height}`, sx + 6 / cameraZoom, sy + 16 / cameraZoom);
+        }
+      }
+
+      if (!isPlaying) {
+        gameObjects.forEach(obj => {
+          if (obj.nodeType !== 'wall_collider' && obj.nodeType !== 'char_collider') return;
+          const parent = gameObjects.find(o => o.id === obj.parentId);
+          if (!parent || !parent.visible) return;
+          const pos = getGlobalPos(parent);
+          ctx.strokeStyle = '#ff9800';
+          ctx.lineWidth = 1.5 / cameraZoom;
+          ctx.setLineDash([4 / cameraZoom, 4 / cameraZoom]);
+          ctx.strokeRect(pos.x - cameraX, pos.y - cameraY, parent.width, parent.height);
+          ctx.setLineDash([]);
+        });
+      }
+
+      if (!isPlaying) {
+        gameObjects.forEach(obj => {
+          if (obj.id !== selectedObjId) return;
+          if (!obj.visible) return;
+          if (obj.nodeType !== 'rect' && obj.nodeType !== 'shape_rect') return;
+          const pos = getGlobalPos(obj);
+          const sx = pos.x - cameraX, sy = pos.y - cameraY;
+          ctx.strokeStyle = obj.locked ? '#ff9800' : '#007acc';
+          ctx.lineWidth = 2 / cameraZoom;
+          const pad = 2 / cameraZoom;
+          ctx.strokeRect(sx - pad, sy - pad, obj.width + pad * 2, obj.height + pad * 2);
+          if (!obj.locked) {
+            const handles = getHandles(obj);
+            const hs = HANDLE_SIZE / cameraZoom;
+            ctx.fillStyle = '#007acc';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1 / cameraZoom;
+            for (const name in handles) {
+              const h = handles[name];
+              const hx = h.x - cameraX - hs / 2;
+              const hy = h.y - cameraY - hs / 2;
+              ctx.fillRect(hx, hy, hs, hs);
+              ctx.strokeRect(hx, hy, hs, hs);
+            }
+          }
+        });
+      }
+
+      ctx.restore();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.font = '11px Consolas';
+      ctx.fillText(isPlaying ? '● PLAYING' : '○ EDIT MODE (方向鍵移動視角 / 滾輪縮放)', 8, 14);
+
+      const ws = getWorldSize();
+      const cam = findCameraFollow();
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '10px Consolas';
+      const info = `World ${ws.width}×${ws.height} · Cam (${Math.round(cameraX)}, ${Math.round(cameraY)}) · Zoom ${cameraZoom.toFixed(2)}×` +
+        (cam ? ` · 🎥 Follow [${cam.target.name}]` : '') +
+        (findWorldBounds() ? '' : ' · ⚠ 無世界邊界');
+      ctx.fillText(info, 8, 28);
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      const btn = document.getElementById('playBtn');
+
+      if (isPlaying) {
+        btn.textContent = "⏹ Stop (停止並重置)";
+        btn.className = "btn-play running";
+        canvas.style.cursor = 'default';
+        clearConsole();
+        log('遊戲開始運行！', 'sys');
+
+        saveSnapshot();
+        gameObjects.forEach(obj => compileScript(obj));
+        gameObjects.forEach(obj => {
+          obj.vx = 0; obj.vy = 0; obj._prevJumpPressed = false;
+          if (obj.nodeType === 'appearance') {
+            obj._wasPressed = false;
+            obj._activeUntil = 0;
+            obj._lastTriggerTime = 0;
+          }
+        });
+
+        let lastTime = performance.now();
+        function loop(now) {
+          if (!isPlaying) return;
+          const delta = Math.min((now - lastTime) / 1000, 0.05);
+          lastTime = now;
+          processNodeBehaviors(delta);
+          renderScene();
+          animationId = requestAnimationFrame(loop);
+        }
+        animationId = requestAnimationFrame(loop);
+
+      } else {
+        btn.textContent = "▶ Play (播放遊戲)";
+        btn.className = "btn-play";
+        if (animationId) cancelAnimationFrame(animationId);
+
+        gameObjects.forEach(obj => {
+          if (obj.nodeType === 'appearance' && obj._videoEl) {
+            try { obj._videoEl.pause(); } catch(e){}
+            obj._videoEl.muted = true;
+          }
+        });
+
+        restoreSnapshot();
+        cameraX = 0; cameraY = 0; cameraZoom = 1.0;
+        renderScene();
+        log('已回到遊戲初始狀態。', 'sys');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

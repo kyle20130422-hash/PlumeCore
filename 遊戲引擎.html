@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTML遊戲引擎工作室 - 修復節點刪除與幽靈角色BUG版</title>
+  <style>
+    /* 樣式保持不變 */
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', 'Courier New', monospace; }
+    body { display: flex; flex-direction: column; height: 100vh; background: #181818; color: #fff; user-select: none; }
+
+    header { background: #1f1f23; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; font-family: sans-serif; }
+    .logo { font-weight: bold; color: #00e676; font-size: 1.1rem; }
+    .actions { display: flex; gap: 10px; }
+
+    main { display: flex; flex: 1; overflow: hidden; }
+    
+    #editor-section { width: 45%; display: flex; flex-direction: column; border-right: 2px solid #333; position: relative; }
+    #codeEditor {
+      flex: 1;
+      background: #1e1e1e;
+      color: #9cdcfe;
+      padding: 15px;
+      font-size: 14px;
+      line-height: 1.5;
+      border: none;
+      outline: none;
+      resize: none;
+      white-space: pre;
+      user-select: text;
+    }
+
+    #codeEditor::selection {
+      background: #264f78;
+      color: #ffffff;
+    }
+
+    #stage-section { width: 55%; padding: 0 12px 12px 12px; display: flex; flex-direction: column; align-items: center; background: #101010; overflow-y: auto; gap: 10px; position: relative; }
+
+    #scene-tab-bar {
+      width: 100%;
+      background: #18181c;
+      display: flex;
+      align-items: center;
+      padding: 6px 6px 0 6px;
+      border-bottom: 2px solid #333;
+      gap: 4px;
+      overflow-x: auto;
+      font-family: sans-serif;
+    }
+
+    .scene-tab {
+      padding: 6px 12px;
+      background: #25252e;
+      color: #888;
+      font-size: 12px;
+      font-weight: bold;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #333;
+      border-bottom: none;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .scene-tab:hover { background: #32323e; color: #fff; }
+
+    .scene-tab.active {
+      background: #101010;
+      color: #00e676;
+      border-color: #00e676;
+      border-bottom: 2px solid #101010;
+      margin-bottom: -2px;
+      box-shadow: 0 -2px 8px rgba(0,230,118,0.2);
+    }
+
+    .close-tab-btn {
+      font-size: 11px;
+      padding: 1px 4px;
+      border-radius: 50%;
+      color: #888;
+      transition: all 0.2s;
+    }
+
+    .close-tab-btn:hover { background: #ff5252; color: #fff; }
+
+    .add-scene-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #282830;
+      color: #00e676;
+      border: 1px solid #444;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-left: 4px;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .add-scene-btn:hover { background: #00e676; color: #000; transform: scale(1.1); }
+
+    canvas { background: #000; border: 2px solid #444; border-radius: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); cursor: pointer; }
+    #gameFrame { width: 100%; height: 320px; border: 2px solid #444; border-radius: 6px; background: #fff; display: none; }
+    #console { width: 100%; color: #ff5555; font-size: 12px; font-family: monospace; white-space: pre-wrap; }
+
+    #stage-section:fullscreen {
+      width: 100vw !important;
+      height: 100vh !important;
+      padding: 0 !important;
+      background: #000 !important;
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
+      overflow: hidden !important;
+    }
+
+    #stage-section:fullscreen #scene-tab-bar,
+    #stage-section:fullscreen #node-panel,
+    #stage-section:fullscreen #console { display: none !important; }
+
+    #stage-section:fullscreen canvas,
+    #stage-section:fullscreen #gameFrame {
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      width: auto !important;
+      height: auto !important;
+      object-fit: contain !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+
+    #node-panel {
+      width: 100%;
+      flex: 1;
+      background: #16161e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+
+    .panel-header {
+      font-size: 12px;
+      color: #888;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #333;
+      padding-bottom: 6px;
+    }
+
+    .btn-sm {
+      padding: 3px 8px;
+      font-size: 11px;
+      background: #282830;
+      color: #00e676;
+      border: 1px solid #444;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+
+    .btn-sm:hover { background: #00e676; color: #000; }
+
+    #nodeTree {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background: #121218;
+      border-radius: 4px;
+      padding: 8px;
+      border: 1px dashed #333;
+      min-height: 120px;
+    }
+
+    .tree-item {
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      border: 2px solid transparent;
+    }
+
+    .color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      border: 1px solid rgba(255,255,255,0.4);
+      box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    }
+
+    .tree-item.root-node { background: #2a3b5c; color: #64b5f6; border-left: 3px solid #2196f3; }
+    .tree-item.child-node { background: #3d2d1d; color: #ffb74d; border-left: 3px solid #ff9800; margin-left: 18px; }
+    .tree-item:hover { filter: brightness(1.2); }
+    
+    .tree-item.selected {
+      border: 2px solid #00e676 !important;
+      background: #223a30 !important;
+      box-shadow: 0 0 8px rgba(0,230,118,0.4);
+    }
+
+    .tree-item.child-highlight {
+      border: 1px dashed #00e676 !important;
+      background: #2a2d24 !important;
+    }
+
+    #contextMenu {
+      position: absolute;
+      display: none;
+      background: #252526;
+      border: 1px solid #454545;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      border-radius: 6px;
+      padding: 4px 0;
+      z-index: 1000;
+      min-width: 220px;
+      font-family: sans-serif;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .menu-header { padding: 4px 12px; font-size: 10px; color: #888; font-weight: bold; }
+    .menu-item { padding: 8px 14px; font-size: 12px; color: #ccc; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    .menu-item:hover { background: #094771; color: #fff; }
+    .menu-item.danger:hover { background: #8a1f1f; color: #fff; }
+    .menu-divider { height: 1px; background: #333; margin: 4px 0; }
+
+    #scriptModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-box {
+      width: 550px;
+      background: #1e1e24;
+      border: 1px solid #444;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+
+    .modal-header {
+      background: #282830;
+      padding: 10px 16px;
+      font-weight: bold;
+      font-size: 13px;
+      color: #00e676;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #333;
+    }
+
+    .modal-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .modal-body label { font-size: 11px; color: #aaa; }
+
+    #scriptArea {
+      width: 100%;
+      height: 200px;
+      background: #121214;
+      color: #a9dc76;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 10px;
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.4;
+      resize: vertical;
+      outline: none;
+      user-select: text;
+    }
+
+    .modal-footer { padding: 10px 16px; background: #282830; display: flex; justify-content: flex-end; gap: 8px; }
+
+    .btn { padding: 8px 14px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-family: sans-serif; }
+    .btn-run { background: #4caf50; color: white; }
+    .btn-fullscreen { background: #9c27b0; color: white; }
+    .btn-upload { background: #2196F3; color: white; }
+    .btn-download { background: #ff9800; color: white; }
+    .btn-secondary { background: #555; color: white; }
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">🎮 HTML遊戲引擎工作室</div>
+    <div class="actions">
+      <button class="btn btn-fullscreen" onclick="toggleFullscreen()">📺 全螢幕</button>
+      <button class="btn btn-upload" onclick="document.getElementById('fileInput').click()">📂 上傳專案</button>
+      <input type="file" id="fileInput" accept=".html,.txt" onchange="uploadHTMLFile(event)">
+      <button class="btn btn-download" onclick="downloadHTMLFile()">💾 下載專案</button>
+      <button class="btn btn-run" onclick="runEngine()">▶ 運行引擎</button>
+    </div>
+  </header>
+
+  <input type="file" id="imageFileInput" accept="image/*" onchange="handleImageUpload(event)">
+  <input type="file" id="sceneBgFileInput" accept="image/*" onchange="handleSceneBgUpload(event)">
+
+  <main>
+    <section id="editor-section">
+      <textarea id="codeEditor" spellcheck="false" oninput="parseTreeFromEditor()"><project>
+  <scene id="場景一" width="480" height="360" background="#0d1117">
+    <node type="Sprite" id="player" x="80" y="100" width="40" height="40" color="#00ffcc" persistent="true">
+      <node type="WASDControl" speed="200"></node>
+      <node type="Gravity" gravity="700"></node>
+      <node type="Jump" jumpForce="350"></node>
+      <node type="Collider" width="40" height="40"></node>
+    </node>
+    <node type="Sprite" id="portal" x="380" y="200" width="40" height="60" color="#aa00ff" targetScene="場景二" trigger="touch">
+      <node type="StaticCollider" width="40" height="60"></node>
+    </node>
+    <node type="Sprite" id="button_box" x="220" y="150" width="40" height="40" color="#ff0055" targetScene="場景二" trigger="click">
+    </node>
+    <node type="Sprite" id="wall" x="40" y="260" width="400" height="30" color="#ff9900">
+      <node type="StaticCollider" width="400" height="30"></node>
+    </node>
+  </scene>
+  <scene id="場景二" width="480" height="360" background="#1a1a24">
+    <node type="Text" x="170" y="80" color="#ffffff" size="20">這是場景二 (玩家已繼承過來)</node>
+    <node type="Sprite" id="back_door" x="40" y="200" width="40" height="60" color="#00e676" targetScene="場景一" trigger="touch">
+      <node type="StaticCollider" width="40" height="60"></node>
+    </node>
+    <node type="Sprite" id="wall2" x="20" y="260" width="440" height="30" color="#4499ff">
+      <node type="StaticCollider" width="440" height="30"></node>
+    </node>
+  </scene>
+</project></textarea>
+    </section>
+
+    <section id="stage-section">
+      <div id="scene-tab-bar">
+        <div id="tabs-container" style="display:flex; gap:4px;"></div>
+        <button class="add-scene-btn" onclick="addNewScene()" title="新增場景">+</button>
+      </div>
+
+      <canvas id="gameCanvas" width="480" height="360"></canvas>
+      <iframe id="gameFrame"></iframe>
+      <div id="console"></div>
+
+      <div id="node-panel">
+        <div class="panel-header">
+          <span>🌳 節點樹結構 (右鍵或按按鈕新增)</span>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-sm" onclick="addNodeToEditor('Sprite')">➕ 角色</button>
+            <button class="btn-sm" onclick="addNodeToEditor('Text')">📝 文字</button>
+          </div>
+        </div>
+        <div id="nodeTree"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="contextMenu"></div>
+
+  <div id="scriptModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span id="modalNodeTitle">📜 編輯節點程式碼</span>
+        <button class="btn btn-secondary" style="padding:2px 8px;" onclick="closeScriptModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <label>撰寫此節點每幀執行的 JavaScript 程式碼：</label>
+        <textarea id="scriptArea" spellcheck="false" placeholder="// 範例：&#10;if (keys['f']) { this.x += 5; }"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeScriptModal()">取消</button>
+        <button class="btn btn-run" onclick="saveNodeScript()">💾 儲存並運行</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameFrame = document.getElementById('gameFrame');
+    const consoleOut = document.getElementById('console');
+    const editor = document.getElementById('codeEditor');
+    const nodeTree = document.getElementById('nodeTree');
+    const nodePanel = document.getElementById('node-panel');
+    const contextMenu = document.getElementById('contextMenu');
+    const tabsContainer = document.getElementById('tabs-container');
+
+    let animationId = null;
+    let engineSessionId = 0;
+    let keys = {};
+    let targetNodeIndex = null;
+    let targetRootIndex = null;
+    let selectedNodePath = null;
+    let activeSceneIndex = 0;
+    let selectedTargetType = 'scene';
+
+    let persistentNodesCache = [];
+    let currentRuntimeNodes = [];
+
+    function formatXML(xml) {
+      let formatted = '';
+      let reg = /(>)(<)(\/*)/g;
+      xml = xml.replace(reg, '$1\r\n$2$3');
+      let pad = 0;
+      
+      xml.split('\r\n').forEach((node) => {
+        let indent = 0;
+        if (node.match(/.+<\/\w[^>]*>$/)) {
+          indent = 0;
+        } else if (node.match(/^<\/\w/)) {
+          if (pad !== 0) pad -= 1;
+        } else if (node.match(/^<\w[^>]*[^\/]>$/)) {
+          indent = 1;
+        } else {
+          indent = 0;
+        }
+
+        let padding = '';
+        for (let i = 0; i < pad; i++) padding += '  ';
+
+        formatted += padding + node + '\n';
+        pad += indent;
+      });
+
+      return formatted.trim();
+    }
+
+    window.addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (e.key === 'F2') {
+        e.preventDefault();
+        if (selectedTargetType === 'scene') {
+          renameActiveScene();
+        } else if (selectedTargetType === 'node') {
+          renameSelectedNode();
+        }
+      }
+    });
+
+    window.addEventListener('keyup', e => keys[e.key] = false);
+    document.addEventListener('click', () => contextMenu.style.display = 'none');
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const clickX = (e.clientX - rect.left) * scaleX;
+      const clickY = (e.clientY - rect.top) * scaleY;
+
+      currentRuntimeNodes.forEach(node => {
+        if (node.targetScene && node.triggerMode === 'click') {
+          if (clickX >= node.x && clickX <= node.x + node.width &&
+              clickY >= node.y && clickY <= node.y + node.height) {
+            switchSceneByName(node.targetScene);
+          }
+        }
+      });
+    });
+
+    function switchSceneByName(sceneName) {
+      const doc = getParsedDoc();
+      const scenes = Array.from(doc.querySelectorAll('scene'));
+      const targetIdx = scenes.findIndex(s => (s.getAttribute('id') || '') === sceneName);
+      if (targetIdx !== -1 && targetIdx !== activeSceneIndex) {
+        persistentNodesCache = currentRuntimeNodes
+          .filter(node => node.isPersistent)
+          .map(node => {
+            node.vx = 0;
+            node.vy = 0;
+            node.speedX = 0;
+            node.speedY = 0;
+            return node;
+          });
+        activeSceneIndex = targetIdx;
+        parseTreeFromEditor();
+        runEngine();
+      }
+    }
+
+    function deleteScene(index, event) {
+      if (event) event.stopPropagation();
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+
+      if (scenes.length <= 1) {
+        alert('⚠️ 遊戲至少需要保留一個場景！');
+        return;
+      }
+
+      const sceneName = scenes[index].getAttribute('id') || `場景${index + 1}`;
+      if (confirm(`確定要刪除「${sceneName}」嗎？`)) {
+        const oldActive = activeSceneIndex;
+        scenes[index].parentNode.removeChild(scenes[index]);
+        
+        if (oldActive === index) {
+          if (oldActive >= scenes.length) {
+            activeSceneIndex = Math.max(0, scenes.length - 1);
+          } else {
+            activeSceneIndex = oldActive;
+          }
+        } else if (oldActive > index) {
+          activeSceneIndex = oldActive - 1;
+        } else {
+          activeSceneIndex = oldActive;
+        }
+        
+        saveDocToEditor(doc);
+      }
+    }
+
+    function highlightInEditor(nodePath) {
+      if (!nodePath) return;
+
+      const code = editor.value;
+      const parts = nodePath.split('-').map(Number);
+      const rootIdx = parts[0];
+      const childIdx = parts.length > 1 ? parts[1] : null;
+
+      let sceneStart = 0;
+      let scenePos = -1;
+      for (let i = 0; i <= activeSceneIndex; i++) {
+        scenePos = code.indexOf('<scene', sceneStart);
+        if (scenePos === -1) break;
+        sceneStart = scenePos + 6;
+      }
+      if (scenePos === -1) scenePos = 0;
+
+      function getTagBlockRange(str, searchFrom, targetIndex) {
+        let count = -1;
+        let pos = searchFrom;
+        while (pos < str.length) {
+          let nodeMatch = str.indexOf('<node', pos);
+          if (nodeMatch === -1) return null;
+          count++;
+          if (count === targetIndex) {
+            let start = nodeMatch;
+            let depth = 0;
+            let curr = start;
+            while (curr < str.length) {
+              let nextTag = str.substring(curr).match(/<\/?node[^>]*>/);
+              if (!nextTag) break;
+              let tagStr = nextTag[0];
+              let tagOffset = curr + nextTag.index;
+              if (tagStr.startsWith('</node')) {
+                depth--;
+                if (depth === 0) return { start, end: tagOffset + tagStr.length };
+              } else if (tagStr.endsWith('/>')) {
+                if (depth === 0) return { start, end: tagOffset + tagStr.length };
+              } else {
+                depth++;
+              }
+              curr = tagOffset + tagStr.length;
+            }
+            let simpleEnd = str.indexOf('>', start);
+            return { start, end: simpleEnd !== -1 ? simpleEnd + 1 : str.length };
+          }
+          pos = nodeMatch + 5;
+        }
+        return null;
+      }
+
+      const rootRange = getTagBlockRange(code, scenePos, rootIdx);
+      if (!rootRange) return;
+
+      let targetStart = rootRange.start;
+      let targetEnd = rootRange.end;
+
+      if (childIdx !== null) {
+        const rootStr = code.substring(rootRange.start, rootRange.end);
+        const firstTagEnd = rootStr.indexOf('>') + 1;
+        const childRange = getTagBlockRange(rootStr, firstTagEnd, childIdx);
+        if (childRange) {
+          targetStart = rootRange.start + childRange.start;
+          targetEnd = rootRange.start + childRange.end;
+        }
+      }
+
+      editor.focus();
+      editor.setSelectionRange(targetStart, targetEnd);
+
+      const beforeText = code.substring(0, targetStart);
+      const lineNum = beforeText.split('\n').length;
+      editor.scrollTop = Math.max(0, (lineNum - 3) * 21);
+    }
+
+    nodeTree.addEventListener('click', (e) => {
+      const treeItem = e.target.closest('.tree-item');
+      document.querySelectorAll('.tree-item').forEach(el => {
+        el.classList.remove('selected');
+        el.classList.remove('child-highlight');
+      });
+
+      if (treeItem) {
+        treeItem.classList.add('selected');
+        selectedNodePath = treeItem.dataset.path;
+        selectedTargetType = 'node';
+        
+        targetNodeIndex = selectedNodePath;
+        if (selectedNodePath.includes('-')) {
+          targetRootIndex = parseInt(selectedNodePath.split('-')[0]);
+        } else {
+          targetRootIndex = parseInt(selectedNodePath);
+        }
+
+        if (treeItem.classList.contains('root-node')) {
+          const rootPath = selectedNodePath;
+          document.querySelectorAll(`.tree-item.child-node`).forEach(childEl => {
+            if (childEl.dataset.path.startsWith(`${rootPath}-`)) {
+              childEl.classList.add('child-highlight');
+            }
+          });
+        }
+
+        highlightInEditor(selectedNodePath);
+      } else {
+        selectedNodePath = null;
+        targetNodeIndex = null;
+        targetRootIndex = null;
+      }
+    });
+
+    function renameActiveScene() {
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      const currentName = activeScene.getAttribute('id') || `場景${activeSceneIndex + 1}`;
+      const newName = prompt('請輸入場景的新名稱：', currentName);
+      if (newName && newName.trim()) {
+        activeScene.setAttribute('id', newName.trim());
+        saveDocToEditor(doc);
+      }
+    }
+
+    function renameSelectedNode() {
+      if (!selectedNodePath) {
+        alert('請先選擇要改名的節點！');
+        return;
+      }
+
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      if (selectedNodePath.includes('-')) {
+        const [parentIdx, childIdx] = selectedNodePath.split('-').map(Number);
+        const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+        const parent = rootNodes[parentIdx];
+        if (parent) {
+          const children = Array.from(parent.children).filter(el => el.tagName.toLowerCase() === 'node');
+          const child = children[childIdx];
+          if (child) {
+            const currentName = child.getAttribute('id') || child.getAttribute('type');
+            const newName = prompt('請輸入子節點的新名稱：', currentName);
+            if (newName && newName.trim()) {
+              child.setAttribute('id', newName.trim());
+              saveDocToEditor(doc);
+            }
+          }
+        }
+      } else {
+        const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+        const node = rootNodes[selectedNodePath];
+        if (node) {
+          const currentName = node.getAttribute('id') || node.getAttribute('type');
+          const newName = prompt('請輸入節點的新名稱 / ID：', currentName);
+          if (newName && newName.trim()) {
+            node.setAttribute('id', newName.trim());
+            saveDocToEditor(doc);
+          }
+        }
+      }
+    }
+
+    function linkNodeToScene(sceneName) {
+      if (targetRootIndex === null) return;
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+      const node = rootNodes[targetRootIndex];
+      if (!node) return;
+
+      if (sceneName) {
+        node.setAttribute('targetScene', sceneName);
+        if (!node.getAttribute('trigger')) {
+          node.setAttribute('trigger', 'touch');
+        }
+      } else {
+        node.removeAttribute('targetScene');
+        node.removeAttribute('trigger');
+      }
+      saveDocToEditor(doc);
+    }
+
+    function setNodeTriggerMode(mode) {
+      if (targetRootIndex === null) return;
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+      const node = rootNodes[targetRootIndex];
+      if (!node) return;
+
+      node.setAttribute('trigger', mode);
+      saveDocToEditor(doc);
+    }
+
+    function toggleNodePersistence() {
+      if (targetRootIndex === null) return;
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+      const node = rootNodes[targetRootIndex];
+      if (!node) return;
+
+      const current = node.getAttribute('persistent') === 'true';
+      if (current) {
+        node.removeAttribute('persistent');
+      } else {
+        node.setAttribute('persistent', 'true');
+      }
+      saveDocToEditor(doc);
+    }
+
+    nodeTree.addEventListener('dblclick', (e) => {
+      const treeItem = e.target.closest('.tree-item');
+      if (!treeItem) return;
+      const nodePath = treeItem.dataset.path;
+      if (nodePath && !nodePath.includes('-')) {
+        targetNodeIndex = nodePath;
+        targetRootIndex = parseInt(nodePath);
+        document.getElementById('imageFileInput').click();
+      }
+    });
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file || targetRootIndex === null) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const doc = getParsedDoc();
+        const scenes = doc.querySelectorAll('scene');
+        const activeScene = scenes[activeSceneIndex];
+        if (!activeScene) return;
+
+        const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+        if (rootNodes[targetRootIndex]) {
+          rootNodes[targetRootIndex].setAttribute('image', evt.target.result);
+          saveDocToEditor(doc);
+        }
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    function handleSceneBgUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const doc = getParsedDoc();
+        const scenes = doc.querySelectorAll('scene');
+        const activeScene = scenes[activeSceneIndex];
+        if (activeScene) {
+          activeScene.setAttribute('image', evt.target.result);
+          saveDocToEditor(doc);
+        }
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    function addNewScene() {
+      const doc = getParsedDoc();
+      let project = doc.querySelector('project');
+
+      if (!project) {
+        const xmlContent = editor.value;
+        const newDoc = (new DOMParser()).parseFromString(`<project>${xmlContent}</project>`, 'text/xml');
+        project = newDoc.querySelector('project');
+        saveDocToEditor(newDoc);
+        return;
+      }
+
+      const sceneCount = doc.querySelectorAll('scene').length + 1;
+      const newScene = doc.createElement('scene');
+      newScene.setAttribute('id', `場景${sceneCount}`);
+      newScene.setAttribute('width', '480');
+      newScene.setAttribute('height', '360');
+      newScene.setAttribute('background', '#151520');
+
+      project.appendChild(newScene);
+      activeSceneIndex = sceneCount - 1;
+      saveDocToEditor(doc);
+    }
+
+    nodePanel.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const treeItem = e.target.closest('.tree-item');
+
+      contextMenu.style.left = `${e.pageX}px`;
+      contextMenu.style.top = `${e.pageY}px`;
+      contextMenu.style.display = 'block';
+
+      const doc = getParsedDoc();
+
+      if (!treeItem || !treeItem.dataset.path) {
+        targetNodeIndex = null;
+        targetRootIndex = null;
+        contextMenu.innerHTML = `
+          <div class="menu-header">➕ 新增主節點</div>
+          <div class="menu-item" onclick="addNodeToEditor('Sprite')">🖼️ 角色/物品節點 (Sprite)</div>
+          <div class="menu-item" onclick="addNodeToEditor('Text')">📝 文字 UI 節點 (Text)</div>
+        `;
+      } else {
+        const nodeType = treeItem.dataset.type;
+        const nodePath = treeItem.dataset.path;
+        targetNodeIndex = nodePath;
+        selectedNodePath = nodePath;
+        
+        if (nodePath.includes('-')) {
+          targetRootIndex = parseInt(nodePath.split('-')[0]);
+        } else {
+          targetRootIndex = parseInt(nodePath);
+        }
+
+        document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('selected'));
+        treeItem.classList.add('selected');
+        highlightInEditor(selectedNodePath);
+
+        if (treeItem.classList.contains('root-node')) {
+          const activeScene = doc.querySelectorAll('scene')[activeSceneIndex];
+          const rootNodes = activeScene ? Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node') : [];
+          const currentNode = rootNodes[targetRootIndex];
+          const currentLinkedScene = currentNode ? currentNode.getAttribute('targetScene') : null;
+          const currentTrigger = currentNode ? (currentNode.getAttribute('trigger') || 'touch') : 'touch';
+          const isPersistent = currentNode ? (currentNode.getAttribute('persistent') === 'true') : false;
+
+          let sceneOptionsHTML = '';
+          const allScenes = Array.from(doc.querySelectorAll('scene'));
+          allScenes.forEach((s, idx) => {
+            const sName = s.getAttribute('id') || `場景${idx + 1}`;
+            const isSelected = (sName === currentLinkedScene);
+            sceneOptionsHTML += `
+              <div class="menu-item" onclick="linkNodeToScene('${sName}')">
+                ${isSelected ? '✅' : '🔗'} 連接至：${sName}
+              </div>`;
+          });
+
+          if (currentLinkedScene) {
+            sceneOptionsHTML += `<div class="menu-item danger" onclick="linkNodeToScene('')">🚫 解除場景連接</div>`;
+          }
+
+          contextMenu.innerHTML = `
+            <div class="menu-header">⚙️ [${treeItem.dataset.id || nodeType}] 節點選項</div>
+            <div class="menu-item" onclick="renameSelectedNode()">✏️ 重新命名 (F2)</div>
+            <div class="menu-item" onclick="openScriptModal()">📜 編輯節點程式碼</div>
+            <div class="menu-item" onclick="toggleNodePersistence()">
+              ${isPersistent ? '✅' : '🔄'} 跨場景繼承 (切換場景保留此物件)
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-header">🌐 連接轉場場景</div>
+            ${sceneOptionsHTML}
+            ${currentLinkedScene ? `
+              <div class="menu-divider"></div>
+              <div class="menu-header">⚡ 轉場觸發條件</div>
+              <div class="menu-item" onclick="setNodeTriggerMode('touch')">
+                ${currentTrigger === 'touch' ? '✅' : '🚶'} WASD角色碰觸切換
+              </div>
+              <div class="menu-item" onclick="setNodeTriggerMode('click')">
+                ${currentTrigger === 'click' ? '✅' : '👆'} 滑鼠按一下切換
+              </div>
+            ` : ''}
+            <div class="menu-divider"></div>
+            <div class="menu-header">➕ 新增子節點</div>
+            <div class="menu-item" onclick="addChildNodeToEditor('WASDControl')">🎮 WASD/方向鍵控制</div>
+            <div class="menu-item" onclick="addChildNodeToEditor('Gravity')">⚓ 重力 (Gravity)</div>
+            <div class="menu-item" onclick="addChildNodeToEditor('Jump')">🦘 跳躍 (Jump)</div>
+            <div class="menu-item" onclick="addChildNodeToEditor('Bounce')">🧱 邊界彈跳</div>
+            <div class="menu-item" onclick="addChildNodeToEditor('Collider')">🛡️ 角色碰撞箱 (可被推擠)</div>
+            <div class="menu-item" onclick="addChildNodeToEditor('StaticCollider')">🧱 物品碰撞箱 (不可穿透)</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item danger" onclick="deleteNodeFromEditor()">❌ 刪除此節點</div>
+          `;
+        } else {
+          contextMenu.innerHTML = `
+            <div class="menu-header">⚙️ 子節點選項</div>
+            <div class="menu-item" onclick="renameSelectedNode()">✏️ 重新命名 (F2)</div>
+            <div class="menu-item danger" onclick="deleteNodeFromEditor()">❌ 刪除此子節點</div>
+          `;
+        }
+      }
+    });
+
+    function openScriptModal() {
+      if (targetRootIndex === null) return;
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+      const node = rootNodes[targetRootIndex];
+      if (!node) return;
+
+      const nodeId = node.getAttribute('id') || '節點';
+      document.getElementById('modalNodeTitle').innerText = `📜 編輯 [${nodeId}] 程式碼`;
+
+      const scriptEl = node.querySelector('script');
+      document.getElementById('scriptArea').value = scriptEl ? scriptEl.textContent : '';
+      document.getElementById('scriptModal').style.display = 'flex';
+    }
+
+    function closeScriptModal() {
+      document.getElementById('scriptModal').style.display = 'none';
+    }
+
+    function saveNodeScript() {
+      if (targetRootIndex === null) return;
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+      const node = rootNodes[targetRootIndex];
+      if (!node) return;
+
+      const scriptCode = document.getElementById('scriptArea').value;
+      let scriptEl = node.querySelector('script');
+
+      if (!scriptEl) {
+        scriptEl = doc.createElement('script');
+        node.appendChild(scriptEl);
+      }
+      scriptEl.textContent = scriptCode;
+
+      saveDocToEditor(doc);
+      closeScriptModal();
+    }
+
+    function getParsedDoc() {
+      const parser = new DOMParser();
+      let xml = editor.value.trim();
+      if (!xml) {
+        xml = '<project><scene id="場景一" width="480" height="360" background="#0d1117"></scene></project>';
+      }
+      if (!xml.startsWith('<project>') && !xml.startsWith('<scene')) {
+        xml = `<project>${xml}</project>`;
+      }
+      let doc = parser.parseFromString(xml, 'text/xml');
+      if (doc.querySelector('parsererror')) {
+        doc = parser.parseFromString('<project><scene id="場景一" width="480" height="360" background="#0d1117"></scene></project>', 'text/xml');
+      }
+      return doc;
+    }
+
+    function saveDocToEditor(doc) {
+      const serializer = new XMLSerializer();
+      let xml = serializer.serializeToString(doc);
+      xml = xml.replace(/xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, '').trim();
+      xml = formatXML(xml);
+      editor.value = xml;
+      parseTreeFromEditor();
+      runEngine();
+      if (selectedNodePath && selectedTargetType === 'node') highlightInEditor(selectedNodePath);
+    }
+
+    function addNodeToEditor(type) {
+      const doc = getParsedDoc();
+      let scenes = doc.querySelectorAll('scene');
+
+      if (scenes.length === 0) {
+        let project = doc.querySelector('project');
+        if (!project) {
+          doc.appendChild(doc.createElement('project'));
+          project = doc.querySelector('project');
+        }
+        const defaultScene = doc.createElement('scene');
+        defaultScene.setAttribute('id', '場景一');
+        defaultScene.setAttribute('width', '480');
+        defaultScene.setAttribute('height', '360');
+        defaultScene.setAttribute('background', '#0d1117');
+        project.appendChild(defaultScene);
+        scenes = doc.querySelectorAll('scene');
+        activeSceneIndex = 0;
+      }
+
+      const activeScene = scenes[activeSceneIndex] || scenes[0];
+      if (!activeScene) return;
+
+      const newNode = doc.createElement('node');
+      newNode.setAttribute('type', type);
+      if (type === 'Sprite') {
+        newNode.setAttribute('id', `node_${Date.now().toString().slice(-4)}`);
+        newNode.setAttribute('x', '100');
+        newNode.setAttribute('y', '100');
+        newNode.setAttribute('width', '40');
+        newNode.setAttribute('height', '40');
+        newNode.setAttribute('color', '#ff9900');
+      } else if (type === 'Text') {
+        newNode.setAttribute('x', '20');
+        newNode.setAttribute('y', '50');
+        newNode.setAttribute('color', '#ffffff');
+        newNode.setAttribute('size', '16');
+        newNode.textContent = '新文字';
+      }
+
+      activeScene.appendChild(newNode);
+      saveDocToEditor(doc);
+    }
+
+    function addChildNodeToEditor(childType) {
+      if (targetRootIndex === null) return;
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+      const parentNode = rootNodes[targetRootIndex];
+      if (!parentNode) return;
+
+      const childNode = doc.createElement('node');
+      childNode.setAttribute('type', childType);
+
+      if (childType === 'WASDControl') childNode.setAttribute('speed', '200');
+      if (childType === 'Gravity') childNode.setAttribute('gravity', '700');
+      if (childType === 'Jump') childNode.setAttribute('jumpForce', '350');
+      if (childType === 'Bounce') { childNode.setAttribute('speedX', '100'); childNode.setAttribute('speedY', '0'); }
+      if (childType === 'Collider' || childType === 'StaticCollider') { 
+        childNode.setAttribute('width', parentNode.getAttribute('width') || '40'); 
+        childNode.setAttribute('height', parentNode.getAttribute('height') || '40'); 
+      }
+
+      parentNode.appendChild(childNode);
+      saveDocToEditor(doc);
+    }
+
+    function deleteNodeFromEditor() {
+      if (targetNodeIndex === null || targetNodeIndex === undefined) return;
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      const rootNodes = Array.from(activeScene.children).filter(el => el.tagName.toLowerCase() === 'node');
+      const pathStr = String(targetNodeIndex);
+
+      if (pathStr.includes('-')) {
+        const [parentIdx, childIdx] = pathStr.split('-').map(Number);
+        const parent = rootNodes[parentIdx];
+        if (parent) {
+          const children = Array.from(parent.children).filter(el => el.tagName.toLowerCase() === 'node');
+          if (children[childIdx]) parent.removeChild(children[childIdx]);
+        }
+      } else {
+        const idx = Number(targetNodeIndex);
+        if (rootNodes[idx]) {
+          rootNodes[idx].parentNode.removeChild(rootNodes[idx]);
+        }
+      }
+
+      targetNodeIndex = null;
+      targetRootIndex = null;
+      selectedNodePath = null;
+      saveDocToEditor(doc);
+    }
+
+    function parseTreeFromEditor() {
+      nodeTree.innerHTML = '';
+      tabsContainer.innerHTML = '';
+
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+
+      if (scenes.length === 0) {
+        nodeTree.innerHTML = '<div style="color:#888; font-size:12px; padding:10px;">尚未建立場景 (請點擊 + 新增場景)</div>';
+        return;
+      }
+
+      if (activeSceneIndex >= scenes.length) activeSceneIndex = 0;
+
+      scenes.forEach((scene, index) => {
+        const sceneId = scene.getAttribute('id') || `場景${index + 1}`;
+        const hasBgImg = !!scene.getAttribute('image');
+
+        const tab = document.createElement('div');
+        tab.className = `scene-tab ${index === activeSceneIndex ? 'active' : ''}`;
+        tab.innerHTML = `
+          <span>${hasBgImg ? '🖼️' : '🎬'} ${sceneId}</span>
+          <span class="close-tab-btn" onclick="deleteScene(${index}, event)" title="刪除場景">✕</span>
+        `;
+
+        tab.addEventListener('click', () => {
+          activeSceneIndex = index;
+          selectedTargetType = 'scene';
+          parseTreeFromEditor();
+          runEngine();
+        });
+
+        tab.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          activeSceneIndex = index;
+          document.getElementById('sceneBgFileInput').click();
+        });
+
+        tabsContainer.appendChild(tab);
+      });
+
+      const currentScene = scenes[activeSceneIndex];
+      const rootNodes = currentScene ? Array.from(currentScene.children).filter(el => el.tagName.toLowerCase() === 'node') : [];
+
+      if (rootNodes.length === 0) {
+        nodeTree.innerHTML = '<div style="color:#888; font-size:12px; padding:10px;">當前場景無節點 (點擊右上角 [+角色] 或右鍵新增)</div>';
+        return;
+      }
+
+      rootNodes.forEach((node, pIdx) => {
+        const type = node.getAttribute('type') || 'Node';
+        const id = node.getAttribute('id') || type;
+        const color = node.getAttribute('color');
+        const targetScene = node.getAttribute('targetScene');
+        const trigger = node.getAttribute('trigger') || 'touch';
+        const isPersistent = node.getAttribute('persistent') === 'true';
+        const hasImg = !!node.getAttribute('image');
+        const hasScript = !!node.querySelector('script');
+
+        const colorDot = color ? `<span class="color-dot" style="background:${color};"></span>` : '';
+        const triggerIcon = (trigger === 'click') ? '👆' : '🚶';
+        const linkTag = targetScene ? `<span style="color:#00e676; font-size:10px; margin-left:4px;">🔗${triggerIcon}→[${targetScene}]</span>` : '';
+        const persistTag = isPersistent ? `<span style="color:#ffb74d; font-size:10px; margin-left:4px;">🔄繼承</span>` : '';
+
+        const item = document.createElement('div');
+        item.className = 'tree-item root-node';
+        if (selectedNodePath === `${pIdx}` && selectedTargetType === 'node') item.classList.add('selected');
+        item.dataset.path = `${pIdx}`;
+        item.dataset.type = type;
+        item.dataset.id = id;
+        item.innerHTML = `${colorDot} ${hasImg ? '🖼️' : '📦'} ${id}${linkTag}${persistTag} ${hasScript ? '📜' : ''} <small style="opacity:0.6">(${type})</small>`;
+        nodeTree.appendChild(item);
+
+        const children = Array.from(node.children).filter(el => el.tagName.toLowerCase() === 'node');
+        children.forEach((cNode, cIdx) => {
+          const cType = cNode.getAttribute('type') || 'Child';
+          const cId = cNode.getAttribute('id') || cType;
+          const cItem = document.createElement('div');
+          cItem.className = 'tree-item child-node';
+          
+          if (selectedNodePath === `${pIdx}-${cIdx}` && selectedTargetType === 'node') {
+            cItem.classList.add('selected');
+          } else if (selectedNodePath === `${pIdx}` && selectedTargetType === 'node') {
+            cItem.classList.add('child-highlight');
+          }
+
+          cItem.dataset.path = `${pIdx}-${cIdx}`;
+          cItem.dataset.type = cType;
+          
+          let icon = '⚙️';
+          if (cType === 'Collider') icon = '🛡️';
+          if (cType === 'StaticCollider') icon = '🧱';
+          if (cType === 'Gravity') icon = '⚓';
+          if (cType === 'Jump') icon = '🦘';
+          if (cType === 'WASDControl') icon = '🎮';
+
+          cItem.innerHTML = `${icon} ${cId}`;
+          nodeTree.appendChild(cItem);
+        });
+      });
+    }
+
+    class GameNode {
+      constructor(element) {
+        this.element = element;
+        this.type = element.getAttribute('type') || 'Node';
+        this.id = element.getAttribute('id') || '';
+        this.targetScene = element.getAttribute('targetScene') || '';
+        this.triggerMode = element.getAttribute('trigger') || 'touch';
+        this.isPersistent = element.getAttribute('persistent') === 'true';
+
+        this.x = parseFloat(element.getAttribute('x')) || 0;
+        this.y = parseFloat(element.getAttribute('y')) || 0;
+        this.width = parseFloat(element.getAttribute('width')) || 30;
+        this.height = parseFloat(element.getAttribute('height')) || 30;
+        this.color = element.getAttribute('color') || '#ffffff';
+        this.src = element.getAttribute('image') || '';
+        
+        this.vx = 0;
+        this.vy = 0;
+        this.speedX = parseFloat(element.getAttribute('speedX')) || 0;
+        this.speedY = parseFloat(element.getAttribute('speedY')) || 0;
+        this.isGrounded = false;
+
+        this.imgObj = null;
+        if (this.src) {
+          this.imgObj = new Image();
+          this.imgObj.src = this.src;
+        }
+
+        this.scriptFunc = null;
+        const scriptEl = element.querySelector('script');
+        if (scriptEl && scriptEl.textContent.trim()) {
+          try {
+            this.scriptFunc = new Function('dt', 'canvas', 'keys', 'ctx', scriptEl.textContent);
+          } catch(e) {
+            console.error(`[${this.id}] 腳本語法錯誤:`, e);
+          }
+        }
+
+        this.children = Array.from(element.children)
+          .filter(childEl => childEl.tagName.toLowerCase() === 'node')
+          .map(childEl => new GameNode(childEl));
+      }
+
+      get hasWASD() {
+        return this.children.some(c => c.type === 'WASDControl');
+      }
+
+      get collider() {
+        const col = this.children.find(c => c.type === 'Collider' || c.type === 'StaticCollider');
+        if (!col) return null;
+        return {
+          type: col.type,
+          isStatic: col.type === 'StaticCollider',
+          x: this.x,
+          y: this.y,
+          w: parseFloat(col.element.getAttribute('width')) || this.width,
+          h: parseFloat(col.element.getAttribute('height')) || this.height
+        };
+      }
+
+      update(dt, canvas, keys, ctx) {
+        this.children.forEach(child => {
+          if (child.type === 'WASDControl') {
+            const speed = parseFloat(child.element.getAttribute('speed')) || 200;
+            this.vx = 0;
+            if (keys['a'] || keys['A'] || keys['ArrowLeft']) this.vx = -speed;
+            if (keys['d'] || keys['D'] || keys['ArrowRight']) this.vx = speed;
+          }
+
+          if (child.type === 'Gravity') {
+            const gravity = parseFloat(child.element.getAttribute('gravity')) || 700;
+            this.vy += gravity * dt;
+          }
+
+          if (child.type === 'Jump') {
+            const jumpForce = parseFloat(child.element.getAttribute('jumpForce')) || 350;
+            if ((keys[' '] || keys['w'] || keys['W'] || keys['ArrowUp']) && this.isGrounded) {
+              this.vy = -jumpForce;
+              this.isGrounded = false;
+            }
+          }
+
+          if (child.type === 'Bounce') {
+            if (this.speedX === 0) this.speedX = parseFloat(child.element.getAttribute('speedX')) || 100;
+            if (this.speedY === 0) this.speedY = parseFloat(child.element.getAttribute('speedY')) || 0;
+          }
+        });
+
+        if (this.scriptFunc) {
+          try {
+            this.scriptFunc.call(this, dt, canvas, keys, ctx);
+          } catch(e) {
+            console.error(`[${this.id}] 腳本執行錯誤:`, e);
+          }
+        }
+
+        this.x += (this.vx + this.speedX) * dt;
+        this.y += (this.vy + this.speedY) * dt;
+
+        const hasGravity = this.children.some(c => c.type === 'Gravity');
+        if (hasGravity && this.y + this.height >= canvas.height) {
+          this.y = canvas.height - this.height;
+          this.vy = 0;
+          this.isGrounded = true;
+        }
+
+        const hasBounce = this.children.some(c => c.type === 'Bounce');
+        if (hasBounce) {
+          if (this.x <= 0 || this.x + this.width >= canvas.width) this.speedX *= -1;
+          if (this.y <= 0 || this.y + this.height >= canvas.height) this.speedY *= -1;
+        }
+      }
+
+      render(ctx) {
+        if (this.type === 'Sprite') {
+          if (this.imgObj && this.imgObj.complete && this.imgObj.naturalWidth !== 0) {
+            ctx.drawImage(this.imgObj, this.x, this.y, this.width, this.height);
+          } else {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+          }
+        } else if (this.type === 'Text') {
+          ctx.fillStyle = this.color;
+          ctx.font = `${this.element.getAttribute('size') || 16}px sans-serif`;
+          ctx.fillText(this.element.textContent, this.x, this.y);
+        }
+
+        const col = this.collider;
+        if (col) {
+          ctx.strokeStyle = col.isStatic ? '#ffcc00' : '#00ff66';
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(col.x, col.y, col.w, col.h);
+          ctx.setLineDash([]);
+        }
+      }
+    }
+
+    function resolveCollisions(nodes) {
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = 0; j < nodes.length; j++) {
+          if (i === j) continue;
+          const a = nodes[i];
+          const b = nodes[j];
+          const ca = a.collider;
+          const cb = b.collider;
+          if (!ca || !cb) continue;
+
+          if (ca.x < cb.x + cb.w && ca.x + ca.w > cb.x &&
+              ca.y < cb.y + cb.h && ca.y + ca.h > cb.y) {
+
+            if (b.targetScene && b.triggerMode === 'touch' && a.hasWASD) {
+              switchSceneByName(b.targetScene);
+              return;
+            }
+            if (a.targetScene && a.triggerMode === 'touch' && b.hasWASD) {
+              switchSceneByName(a.targetScene);
+              return;
+            }
+
+            const overlapX = (ca.x + ca.w / 2) - (cb.x + cb.w / 2);
+            const overlapY = (ca.y + ca.h / 2) - (cb.y + cb.h / 2);
+            const minX = (ca.w + cb.w) / 2 - Math.abs(overlapX);
+            const minY = (ca.h + cb.h) / 2 - Math.abs(overlapY);
+
+            if (cb.isStatic) {
+              if (minX < minY) {
+                if (overlapX > 0) a.x = cb.x + cb.w;
+                else a.x = cb.x - ca.w;
+                a.vx = 0;
+              } else {
+                if (overlapY > 0) {
+                  a.y = cb.y + cb.h;
+                  a.vy = Math.max(0, a.vy);
+                } else {
+                  a.y = cb.y - ca.h;
+                  a.vy = 0;
+                  a.isGrounded = true;
+                }
+              }
+            } 
+            else if (i < j && !ca.isStatic) {
+              if (minX < minY) {
+                const shift = minX / 2;
+                if (overlapX > 0) { a.x += shift; b.x -= shift; }
+                else { a.x -= shift; b.x += shift; }
+              } else {
+                const shift = minY / 2;
+                if (overlapY > 0) { a.y += shift; b.y -= shift; }
+                else { a.y -= shift; b.y += shift; }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    let currentBgImg = null;
+
+    function runEngine() {
+      if (animationId) cancelAnimationFrame(animationId);
+      engineSessionId++; 
+      const currentSession = engineSessionId;
+
+      consoleOut.innerText = '';
+      
+      const code = editor.value;
+
+      if (!code.includes('<scene') && !code.includes('<node')) {
+        canvas.style.display = 'none';
+        gameFrame.style.display = 'block';
+        gameFrame.srcdoc = code;
+        nodeTree.innerHTML = '<div style="color:#666; font-size:12px; padding:10px;">外部原生 HTML 模式</div>';
+        return;
+      }
+
+      gameFrame.style.display = 'none';
+      canvas.style.display = 'block';
+
+      const doc = getParsedDoc();
+      const scenes = doc.querySelectorAll('scene');
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      canvas.width = parseInt(activeScene.getAttribute('width')) || 480;
+      canvas.height = parseInt(activeScene.getAttribute('height')) || 360;
+      const bgColor = activeScene.getAttribute('background') || '#000000';
+      const bgImgSrc = activeScene.getAttribute('image');
+
+      if (bgImgSrc) {
+        currentBgImg = new Image();
+        currentBgImg.src = bgImgSrc;
+      } else {
+        currentBgImg = null;
+      }
+
+      // 清理幽靈節點
+      const allNodeIds = new Set();
+      scenes.forEach(scene => {
+        const nodes = Array.from(scene.children).filter(el => el.tagName.toLowerCase() === 'node');
+        nodes.forEach(node => {
+          const id = node.getAttribute('id');
+          if (id) allNodeIds.add(id);
+        });
+      });
+      persistentNodesCache = persistentNodesCache.filter(pNode => allNodeIds.has(pNode.id));
+
+      let rootNodes = Array.from(activeScene.children)
+        .filter(el => el.tagName.toLowerCase() === 'node')
+        .map(el => new GameNode(el));
+
+      if (persistentNodesCache.length > 0) {
+        persistentNodesCache.forEach(pNode => {
+          const matchIdx = rootNodes.findIndex(n => n.id && n.id === pNode.id);
+          if (matchIdx !== -1) {
+            rootNodes[matchIdx] = pNode;
+          } else {
+            rootNodes.push(pNode);
+          }
+        });
+      }
+
+      currentRuntimeNodes = rootNodes;
+
+      let lastTime = performance.now();
+      function loop(now) {
+        if (currentSession !== engineSessionId) return;
+
+        const rawDt = (now - lastTime) / 1000;
+        const dt = Math.min(rawDt, 0.05);
+        lastTime = now;
+
+        if (currentBgImg && currentBgImg.complete && currentBgImg.naturalWidth !== 0) {
+          ctx.drawImage(currentBgImg, 0, 0, canvas.width, canvas.height);
+        } else {
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        currentRuntimeNodes.forEach(node => node.update(dt, canvas, keys, ctx));
+        resolveCollisions(currentRuntimeNodes);
+        currentRuntimeNodes.forEach(node => node.render(ctx));
+
+        animationId = requestAnimationFrame(loop);
+      }
+      animationId = requestAnimationFrame(loop);
+    }
+
+    function toggleFullscreen() {
+      const stage = document.getElementById('stage-section');
+      if (!document.fullscreenElement) {
+        if (stage.requestFullscreen) stage.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    function uploadHTMLFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => { editor.value = e.target.result; parseTreeFromEditor(); runEngine(); };
+      reader.readAsText(file);
+    }
+
+    function downloadHTMLFile() {
+      const xmlData = editor.value;
+
+      const standaloneHTML = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>獨立遊戲 - 由HTML遊戲引擎匯出</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #111;
+      overflow: hidden;
+    }
+    canvas {
+      border: 2px solid #444;
+      border-radius: 6px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.7);
+      max-width: 100vw;
+      max-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <script type="text/xml" id="gameData">
+${xmlData}
+  <\/script>
+
+  <script>
+  (function() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let keys = {};
+    let activeSceneIndex = 0;
+    let persistentNodesCache = [];
+    let currentRuntimeNodes = [];
+    let currentBgImg = null;
+    let animationId = null;
+    let engineSessionId = 0;
+
+    const xmlString = document.getElementById('gameData').textContent.trim();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlString, 'text/xml');
+    if (doc.querySelector('parsererror')) {
+      console.error('XML 解析失敗，請檢查專案內容');
+      return;
+    }
+
+    const scenes = Array.from(doc.querySelectorAll('scene'));
+    if (scenes.length === 0) {
+      console.error('沒有場景可顯示');
+      return;
+    }
+
+    window.addEventListener('keydown', e => { keys[e.key] = true; });
+    window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const clickX = (e.clientX - rect.left) * scaleX;
+      const clickY = (e.clientY - rect.top) * scaleY;
+
+      currentRuntimeNodes.forEach(node => {
+        if (node.targetScene && node.triggerMode === 'click') {
+          if (clickX >= node.x && clickX <= node.x + node.width &&
+              clickY >= node.y && clickY <= node.y + node.height) {
+            switchSceneByName(node.targetScene);
+          }
+        }
+      });
+    });
+
+    function switchSceneByName(sceneName) {
+      const targetIdx = scenes.findIndex(s => (s.getAttribute('id') || '') === sceneName);
+      if (targetIdx !== -1 && targetIdx !== activeSceneIndex) {
+        persistentNodesCache = currentRuntimeNodes
+          .filter(node => node.isPersistent)
+          .map(node => {
+            node.vx = 0;
+            node.vy = 0;
+            node.speedX = 0;
+            node.speedY = 0;
+            return node;
+          });
+        activeSceneIndex = targetIdx;
+        initScene();
+      }
+    }
+
+    class GameNode {
+      constructor(element) {
+        this.element = element;
+        this.type = element.getAttribute('type') || 'Node';
+        this.id = element.getAttribute('id') || '';
+        this.targetScene = element.getAttribute('targetScene') || '';
+        this.triggerMode = element.getAttribute('trigger') || 'touch';
+        this.isPersistent = element.getAttribute('persistent') === 'true';
+
+        this.x = parseFloat(element.getAttribute('x')) || 0;
+        this.y = parseFloat(element.getAttribute('y')) || 0;
+        this.width = parseFloat(element.getAttribute('width')) || 30;
+        this.height = parseFloat(element.getAttribute('height')) || 30;
+        this.color = element.getAttribute('color') || '#ffffff';
+        this.src = element.getAttribute('image') || '';
+        
+        this.vx = 0;
+        this.vy = 0;
+        this.speedX = parseFloat(element.getAttribute('speedX')) || 0;
+        this.speedY = parseFloat(element.getAttribute('speedY')) || 0;
+        this.isGrounded = false;
+
+        this.imgObj = null;
+        if (this.src) {
+          this.imgObj = new Image();
+          this.imgObj.src = this.src;
+        }
+
+        this.scriptFunc = null;
+        const scriptEl = element.querySelector('script');
+        if (scriptEl && scriptEl.textContent.trim()) {
+          try {
+            this.scriptFunc = new Function('dt', 'canvas', 'keys', 'ctx', scriptEl.textContent);
+          } catch(e) {
+            console.error('[' + this.id + '] 腳本語法錯誤:', e);
+          }
+        }
+
+        this.children = Array.from(element.children)
+          .filter(childEl => childEl.tagName.toLowerCase() === 'node')
+          .map(childEl => new GameNode(childEl));
+      }
+
+      get hasWASD() {
+        return this.children.some(c => c.type === 'WASDControl');
+      }
+
+      get collider() {
+        const col = this.children.find(c => c.type === 'Collider' || c.type === 'StaticCollider');
+        if (!col) return null;
+        return {
+          type: col.type,
+          isStatic: col.type === 'StaticCollider',
+          x: this.x,
+          y: this.y,
+          w: parseFloat(col.element.getAttribute('width')) || this.width,
+          h: parseFloat(col.element.getAttribute('height')) || this.height
+        };
+      }
+
+      update(dt) {
+        this.children.forEach(child => {
+          if (child.type === 'WASDControl') {
+            const speed = parseFloat(child.element.getAttribute('speed')) || 200;
+            this.vx = 0;
+            if (keys['a'] || keys['A'] || keys['ArrowLeft']) this.vx = -speed;
+            if (keys['d'] || keys['D'] || keys['ArrowRight']) this.vx = speed;
+          }
+          if (child.type === 'Gravity') {
+            const gravity = parseFloat(child.element.getAttribute('gravity')) || 700;
+            this.vy += gravity * dt;
+          }
+          if (child.type === 'Jump') {
+            const jumpForce = parseFloat(child.element.getAttribute('jumpForce')) || 350;
+            if ((keys[' '] || keys['w'] || keys['W'] || keys['ArrowUp']) && this.isGrounded) {
+              this.vy = -jumpForce;
+              this.isGrounded = false;
+            }
+          }
+          if (child.type === 'Bounce') {
+            if (this.speedX === 0) this.speedX = parseFloat(child.element.getAttribute('speedX')) || 100;
+            if (this.speedY === 0) this.speedY = parseFloat(child.element.getAttribute('speedY')) || 0;
+          }
+        });
+
+        if (this.scriptFunc) {
+          try {
+            this.scriptFunc.call(this, dt, canvas, keys, ctx);
+          } catch(e) {
+            console.error('[' + this.id + '] 腳本執行錯誤:', e);
+          }
+        }
+
+        this.x += (this.vx + this.speedX) * dt;
+        this.y += (this.vy + this.speedY) * dt;
+
+        const hasGravity = this.children.some(c => c.type === 'Gravity');
+        if (hasGravity && this.y + this.height >= canvas.height) {
+          this.y = canvas.height - this.height;
+          this.vy = 0;
+          this.isGrounded = true;
+        }
+
+        const hasBounce = this.children.some(c => c.type === 'Bounce');
+        if (hasBounce) {
+          if (this.x <= 0 || this.x + this.width >= canvas.width) this.speedX *= -1;
+          if (this.y <= 0 || this.y + this.height >= canvas.height) this.speedY *= -1;
+        }
+      }
+
+      render(ctx) {
+        if (this.type === 'Sprite') {
+          if (this.imgObj && this.imgObj.complete && this.imgObj.naturalWidth !== 0) {
+            ctx.drawImage(this.imgObj, this.x, this.y, this.width, this.height);
+          } else {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+          }
+        } else if (this.type === 'Text') {
+          ctx.fillStyle = this.color;
+          ctx.font = (this.element.getAttribute('size') || 16) + 'px sans-serif';
+          ctx.fillText(this.element.textContent, this.x, this.y);
+        }
+
+        const col = this.collider;
+        if (col) {
+          ctx.strokeStyle = col.isStatic ? '#ffcc00' : '#00ff66';
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(col.x, col.y, col.w, col.h);
+          ctx.setLineDash([]);
+        }
+      }
+    }
+
+    function resolveCollisions(nodes) {
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = 0; j < nodes.length; j++) {
+          if (i === j) continue;
+          const a = nodes[i];
+          const b = nodes[j];
+          const ca = a.collider;
+          const cb = b.collider;
+          if (!ca || !cb) continue;
+
+          if (ca.x < cb.x + cb.w && ca.x + ca.w > cb.x &&
+              ca.y < cb.y + cb.h && ca.y + ca.h > cb.y) {
+
+            if (b.targetScene && b.triggerMode === 'touch' && a.hasWASD) {
+              switchSceneByName(b.targetScene);
+              return;
+            }
+            if (a.targetScene && a.triggerMode === 'touch' && b.hasWASD) {
+              switchSceneByName(a.targetScene);
+              return;
+            }
+
+            const overlapX = (ca.x + ca.w / 2) - (cb.x + cb.w / 2);
+            const overlapY = (ca.y + ca.h / 2) - (cb.y + cb.h / 2);
+            const minX = (ca.w + cb.w) / 2 - Math.abs(overlapX);
+            const minY = (ca.h + cb.h) / 2 - Math.abs(overlapY);
+
+            if (cb.isStatic) {
+              if (minX < minY) {
+                if (overlapX > 0) a.x = cb.x + cb.w;
+                else a.x = cb.x - ca.w;
+                a.vx = 0;
+              } else {
+                if (overlapY > 0) {
+                  a.y = cb.y + cb.h;
+                  a.vy = Math.max(0, a.vy);
+                } else {
+                  a.y = cb.y - ca.h;
+                  a.vy = 0;
+                  a.isGrounded = true;
+                }
+              }
+            } 
+            else if (i < j && !ca.isStatic) {
+              if (minX < minY) {
+                const shift = minX / 2;
+                if (overlapX > 0) { a.x += shift; b.x -= shift; }
+                else { a.x -= shift; b.x += shift; }
+              } else {
+                const shift = minY / 2;
+                if (overlapY > 0) { a.y += shift; b.y -= shift; }
+                else { a.y -= shift; b.y += shift; }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    function initScene() {
+      if (animationId) cancelAnimationFrame(animationId);
+      engineSessionId++;
+      const currentSession = engineSessionId;
+
+      const activeScene = scenes[activeSceneIndex];
+      if (!activeScene) return;
+
+      canvas.width = parseInt(activeScene.getAttribute('width')) || 480;
+      canvas.height = parseInt(activeScene.getAttribute('height')) || 360;
+      const bgColor = activeScene.getAttribute('background') || '#000000';
+      const bgImgSrc = activeScene.getAttribute('image');
+
+      if (bgImgSrc) {
+        currentBgImg = new Image();
+        currentBgImg.src = bgImgSrc;
+      } else {
+        currentBgImg = null;
+      }
+
+      const allNodeIds = new Set();
+      scenes.forEach(scene => {
+        Array.from(scene.children)
+          .filter(el => el.tagName.toLowerCase() === 'node')
+          .forEach(node => {
+            const id = node.getAttribute('id');
+            if (id) allNodeIds.add(id);
+          });
+      });
+      persistentNodesCache = persistentNodesCache.filter(pNode => allNodeIds.has(pNode.id));
+
+      let rootNodes = Array.from(activeScene.children)
+        .filter(el => el.tagName.toLowerCase() === 'node')
+        .map(el => new GameNode(el));
+
+      if (persistentNodesCache.length > 0) {
+        persistentNodesCache.forEach(pNode => {
+          const matchIdx = rootNodes.findIndex(n => n.id && n.id === pNode.id);
+          if (matchIdx !== -1) {
+            rootNodes[matchIdx] = pNode;
+          } else {
+            rootNodes.push(pNode);
+          }
+        });
+      }
+
+      currentRuntimeNodes = rootNodes;
+      let lastTime = performance.now();
+
+      function loop(now) {
+        if (currentSession !== engineSessionId) return;
+        const rawDt = (now - lastTime) / 1000;
+        const dt = Math.min(rawDt, 0.05);
+        lastTime = now;
+
+        if (currentBgImg && currentBgImg.complete && currentBgImg.naturalWidth !== 0) {
+          ctx.drawImage(currentBgImg, 0, 0, canvas.width, canvas.height);
+        } else {
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        currentRuntimeNodes.forEach(node => node.update(dt));
+        resolveCollisions(currentRuntimeNodes);
+        currentRuntimeNodes.forEach(node => node.render(ctx));
+
+        animationId = requestAnimationFrame(loop);
+      }
+      animationId = requestAnimationFrame(loop);
+    }
+
+    initScene();
+  })();
+  <\/script>
+</body>
+</html>`;
+
+      const blob = new Blob([standaloneHTML], { type: 'text/html;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'standalone_game.html';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    parseTreeFromEditor();
+    runEngine();
+  </script>
+</body>
+</html>

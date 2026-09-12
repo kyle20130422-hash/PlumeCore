@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- SEO 設定 -->
+  <title>PlumeCore Engine Studio - 遊戲引擎下載與開發大廳</title>
+  <meta name="description" content="PlumeCore Engine Studio 提供強大的 2D 組件化與物理節點遊戲引擎 PlumeCore，以及輕量級 HTML 遊戲引擎。支援線上開發與桌面 PWA 安裝。">
+  <meta name="keywords" content="PlumeCore, HTML遊戲引擎, 遊戲引擎, 2D遊戲開發, 迷幻大貓貓, Godot替代, PWA遊戲引擎">
+  <meta name="author" content="迷幻大貓貓">
+
+  <!-- PWA & 圖示 -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="logo-192.png">
+  <meta name="theme-color" content="#18181c">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: #121215;
+      color: #e0e0e0;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1e1e24, #2a2a35);
+      padding: 50px 20px;
+      text-align: center;
+      border-bottom: 1px solid #333340;
+    }
+    .logo-header {
+      width: 90px;
+      height: 90px;
+      margin-bottom: 15px;
+      border-radius: 18px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    header h1 {
+      font-size: 2.5rem;
+      color: #ffffff;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+    header p {
+      font-size: 1.1rem;
+      color: #a0a0b0;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 20px;
+      flex: 1;
+    }
+
+    .section-title {
+      font-size: 1.8rem;
+      margin-bottom: 25px;
+      text-align: center;
+      color: #ffffff;
+    }
+
+    .engine-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 30px;
+    }
+
+    .engine-card {
+      background: #1c1c24;
+      border: 1px solid #2e2e3d;
+      border-radius: 12px;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    .engine-card:hover {
+      transform: translateY(-5px);
+      border-color: #4f46e5;
+      box-shadow: 0 8px 25px rgba(79, 70, 229, 0.2);
+    }
+
+    .card-header h2 {
+      font-size: 1.6rem;
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
+    .badge-pro { background: #4f46e5; color: white; }
+    .badge-lite { background: #10b981; color: white; }
+
+    .card-body p {
+      color: #b0b0c0;
+      font-size: 0.95rem;
+      margin-bottom: 20px;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin-bottom: 25px;
+    }
+    .feature-list li {
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+      color: #d0d0e0;
+      display: flex;
+      align-items: center;
+    }
+    .feature-list li::before {
+      content: "✓";
+      color: #10b981;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      flex: 1;
+      text-align: center;
+      padding: 12px 18px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      border: none;
+    }
+    .btn-primary {
+      background: #4f46e5;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #4338ca;
+    }
+    .btn-secondary {
+      background: #2d2d3a;
+      color: #e0e0e0;
+      border: 1px solid #3d3d50;
+    }
+    .btn-secondary:hover {
+      background: #3a3a4d;
+    }
+
+    footer {
+      text-align: center;
+      padding: 30px;
+      background: #0d0d10;
+      color: #707080;
+      font-size: 0.85rem;
+      border-top: 1px solid #22222a;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="logo-192.png" alt="PlumeCore Logo" class="logo-header">
+    <h1>PlumeCore Engine Studio</h1>
+    <p>強大、輕量、跨平台的 2D 遊戲開發引擎系統。支援網頁即時運作與桌面離線安裝。</p>
+  </header>
+
+  <div class="container">
+    <h2 class="section-title">選擇您的遊戲引擎版本</h2>
+
+    <div class="engine-grid">
+      
+      <!-- PlumeCore 主引擎 -->
+      <div class="engine-card">
+        <div>
+          <span class="badge badge-pro">旗艦物理引擎</span>
+          <div class="card-header">
+            <h2>PlumeCore 遊戲引擎</h2>
+          </div>
+          <div class="card-body">
+            <p>具備組件化 (Component-Based) 架構與物理節點模擬系統，專為高品質 2D 遊戲設計。</p>
+            <ul class="feature-list">
+              <li>物理模擬 (重力、跳躍、彈跳、碰撞箱)</li>
+              <li>靈活的攝影機跟隨與平移約束</li>
+              <li>即時 Console 監控與內建腳本編輯器</li>
+              <li>支援多媒體外觀與動態代碼觸發</li>
+              <li>一鍵安裝至桌面獨立視窗執行</li>
+            </ul>
+          </div>
+        </div>
+        <div class="btn-group">
+          <a href="遊戲引擎pro.html" class="btn btn-primary">線上直接啟動</a>
+        </div>
+      </div>
+
+      <!-- HTML 遊戲引擎 -->
+      <div class="engine-card">
+        <div>
+          <span class="badge badge-lite">輕量入門引擎</span>
+          <div class="card-header">
+            <h2>HTML 遊戲引擎</h2>
+          </div>
+          <div class="card-body">
+            <p>採用直觀的 XML 樹狀結構與多場景分頁，適合快速原型設計與初學者入門。</p>
+            <ul class="feature-list">
+              <li>直觀的 XML 節點樹狀管理</li>
+              <li>多場景 Tab 分頁輕鬆切換</li>
+              <li>極致輕量化，載入速度極快</li>
+              <li>支援基礎 2D 元素與邏輯綁定</li>
+              <li>支援桌面安裝與獨立運作</li>
+            </ul>
+          </div>
+        </div>
+        <div class="btn-group">
+          <a href="遊戲引擎.html" class="btn btn-primary">線上直接啟動</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    <p>© 2026 PlumeCore Engine Studio. Developed by 迷幻大貓貓.</p>
+  </footer>
+
+  <script>
+    // 註冊 Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker 註冊成功'))
+          .catch(err => console.log('Service Worker 註冊失敗:', err));
+      });
+    }
+  </script>
+</body>
+</html>

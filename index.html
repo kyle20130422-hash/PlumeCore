@@ -1,255 +1,83 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
+<!doctype html>
+<html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <!-- SEO 設定 -->
-  <title>PlumeCore Engine Studio - 遊戲引擎下載與開發大廳</title>
-  <meta name="description" content="PlumeCore Engine Studio 提供強大的 2D 組件化與物理節點遊戲引擎 PlumeCore，以及輕量級 HTML 遊戲引擎。支援線上開發與桌面 PWA 安裝。">
-  <meta name="keywords" content="PlumeCore, HTML遊戲引擎, 遊戲引擎, 2D遊戲開發, 迷幻大貓貓, Godot替代, PWA遊戲引擎">
-  <meta name="author" content="迷幻大貓貓">
-
-  <!-- PWA & 圖示 -->
-  <link rel="manifest" href="manifest.json">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11131b">
+  <meta name="description" content="下載 PlumeCore_Project Windows 桌面版。使用組件、物理、房間與自訂圖示，開始製作 2D 遊戲。">
+  <title>PlumeCore_Project — 2D 遊戲引擎</title>
   <link rel="icon" type="image/png" href="logo-192.png">
-  <meta name="theme-color" content="#18181c">
-
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    body {
-      background-color: #121215;
-      color: #e0e0e0;
-      line-height: 1.6;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-    header {
-      background: linear-gradient(135deg, #1e1e24, #2a2a35);
-      padding: 50px 20px;
-      text-align: center;
-      border-bottom: 1px solid #333340;
-    }
-    .logo-header {
-      width: 90px;
-      height: 90px;
-      margin-bottom: 15px;
-      border-radius: 18px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    }
-    header h1 {
-      font-size: 2.5rem;
-      color: #ffffff;
-      margin-bottom: 10px;
-      letter-spacing: 1px;
-    }
-    header p {
-      font-size: 1.1rem;
-      color: #a0a0b0;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    .container {
-      max-width: 1100px;
-      margin: 40px auto;
-      padding: 0 20px;
-      flex: 1;
-    }
-
-    .section-title {
-      font-size: 1.8rem;
-      margin-bottom: 25px;
-      text-align: center;
-      color: #ffffff;
-    }
-
-    .engine-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 30px;
-    }
-
-    .engine-card {
-      background: #1c1c24;
-      border: 1px solid #2e2e3d;
-      border-radius: 12px;
-      padding: 30px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-    }
-    .engine-card:hover {
-      transform: translateY(-5px);
-      border-color: #4f46e5;
-      box-shadow: 0 8px 25px rgba(79, 70, 229, 0.2);
-    }
-
-    .card-header h2 {
-      font-size: 1.6rem;
-      color: #ffffff;
-      margin-bottom: 10px;
-    }
-    .badge {
-      display: inline-block;
-      padding: 3px 8px;
-      font-size: 0.75rem;
-      font-weight: bold;
-      border-radius: 4px;
-      margin-bottom: 15px;
-    }
-    .badge-pro { background: #4f46e5; color: white; }
-    .badge-lite { background: #10b981; color: white; }
-
-    .card-body p {
-      color: #b0b0c0;
-      font-size: 0.95rem;
-      margin-bottom: 20px;
-    }
-
-    .feature-list {
-      list-style: none;
-      margin-bottom: 25px;
-    }
-    .feature-list li {
-      margin-bottom: 8px;
-      font-size: 0.9rem;
-      color: #d0d0e0;
-      display: flex;
-      align-items: center;
-    }
-    .feature-list li::before {
-      content: "✓";
-      color: #10b981;
-      font-weight: bold;
-      margin-right: 8px;
-    }
-
-    .btn-group {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .btn {
-      flex: 1;
-      text-align: center;
-      padding: 12px 18px;
-      border-radius: 6px;
-      text-decoration: none;
-      font-weight: bold;
-      font-size: 0.95rem;
-      cursor: pointer;
-      transition: background 0.2s, opacity 0.2s;
-      border: none;
-    }
-    .btn-primary {
-      background: #4f46e5;
-      color: white;
-    }
-    .btn-primary:hover {
-      background: #4338ca;
-    }
-    .btn-secondary {
-      background: #2d2d3a;
-      color: #e0e0e0;
-      border: 1px solid #3d3d50;
-    }
-    .btn-secondary:hover {
-      background: #3a3a4d;
-    }
-
-    footer {
-      text-align: center;
-      padding: 30px;
-      background: #0d0d10;
-      color: #707080;
-      font-size: 0.85rem;
-      border-top: 1px solid #22222a;
-    }
+    :root { color-scheme: dark; --bg:#11131b; --panel:#191c27; --line:#2d3242; --text:#f5f7ff; --muted:#aab1c4; --accent:#7c83ff; --cyan:#57d7cf; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(ellipse at 50% -25%,#303764 0,transparent 55%),var(--bg); color:var(--text); font:16px/1.6 "Segoe UI",system-ui,sans-serif; }
+    .wrap { width:min(1040px,calc(100% - 36px)); margin:0 auto; }
+    header { height:78px; display:flex; align-items:center; gap:12px; border-bottom:1px solid rgba(255,255,255,.08); }
+    header img { width:40px; height:40px; border-radius:10px; }
+    .brand { font-size:1.08rem; font-weight:750; letter-spacing:.02em; }
+    .brand small { display:block; color:var(--muted); font-size:.68rem; font-weight:500; letter-spacing:.1em; text-transform:uppercase; }
+    main { padding:76px 0 64px; }
+    .hero { max-width:760px; margin:0 auto; text-align:center; }
+    .eyebrow { display:inline-flex; padding:5px 12px; border:1px solid #444b70; border-radius:999px; color:#c9ccff; background:#252946; font-size:.78rem; font-weight:700; letter-spacing:.08em; }
+    h1 { margin:20px 0 12px; font-size:clamp(2.35rem,7vw,4.4rem); line-height:1.08; letter-spacing:-.045em; }
+    .hero p { max-width:650px; margin:0 auto; color:var(--muted); font-size:1.12rem; }
+    .actions { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; margin:30px 0 18px; }
+    .button { display:inline-flex; align-items:center; justify-content:center; min-height:50px; padding:0 22px; border-radius:10px; text-decoration:none; font-weight:750; transition:transform .15s,filter .15s; }
+    .button:hover { transform:translateY(-2px); filter:brightness(1.08); }
+    .primary { color:#10121a; background:linear-gradient(110deg,var(--cyan),#a6f5e8); box-shadow:0 8px 26px #57d7cf2e; }
+    .secondary { color:var(--text); background:#202434; border:1px solid var(--line); }
+    .release { color:var(--muted); font-size:.84rem; }
+    .features { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:64px; }
+    .card { padding:24px; border:1px solid var(--line); border-radius:16px; background:linear-gradient(150deg,#1b1e2a,#161923); }
+    .icon { width:38px; height:38px; display:grid; place-items:center; margin-bottom:14px; border-radius:10px; background:#2a2e4b; color:#bfc4ff; font-size:1.2rem; }
+    .card h2 { margin:0 0 7px; font-size:1.08rem; }
+    .card p { margin:0; color:var(--muted); font-size:.92rem; }
+    .install { margin-top:18px; padding:20px 22px; border:1px solid #313849; border-radius:14px; background:#151822; color:var(--muted); font-size:.9rem; }
+    .install strong { color:var(--text); }
+    code { color:#d8ddf3; overflow-wrap:anywhere; }
+    footer { padding:22px 0 30px; border-top:1px solid rgba(255,255,255,.08); color:#858da2; text-align:center; font-size:.82rem; }
+    @media (max-width:720px) { main { padding:56px 0 44px; } .features { grid-template-columns:1fr; margin-top:44px; } .card { padding:20px; } }
   </style>
 </head>
 <body>
-
-  <header>
-    <img src="logo-192.png" alt="PlumeCore Logo" class="logo-header">
-    <h1>PlumeCore Engine Studio</h1>
-    <p>強大、輕量、跨平台的 2D 遊戲開發引擎系統。支援網頁即時運作與桌面離線安裝。</p>
+  <header class="wrap">
+    <img src="logo-192.png" alt="PlumeCore 標誌">
+    <div class="brand">PlumeCore_Project<small>2D Game Engine</small></div>
   </header>
-
-  <div class="container">
-    <h2 class="section-title">選擇您的遊戲引擎版本</h2>
-
-    <div class="engine-grid">
-      
-      <!-- PlumeCore 主引擎 -->
-      <div class="engine-card">
-        <div>
-          <span class="badge badge-pro">旗艦物理引擎</span>
-          <div class="card-header">
-            <h2>PlumeCore 遊戲引擎</h2>
-          </div>
-          <div class="card-body">
-            <p>具備組件化 (Component-Based) 架構與物理節點模擬系統，專為高品質 2D 遊戲設計。</p>
-            <ul class="feature-list">
-              <li>物理模擬 (重力、跳躍、彈跳、碰撞箱)</li>
-              <li>靈活的攝影機跟隨與平移約束</li>
-              <li>即時 Console 監控與內建腳本編輯器</li>
-              <li>支援多媒體外觀與動態代碼觸發</li>
-              <li>一鍵安裝至桌面獨立視窗執行</li>
-            </ul>
-          </div>
-        </div>
-        <div class="btn-group">
-          <a href="遊戲引擎pro.html" class="btn btn-primary">線上直接啟動</a>
-        </div>
+  <main class="wrap">
+    <section class="hero">
+      <span class="eyebrow">WINDOWS DESKTOP EDITION</span>
+      <h1>把你的 2D 遊戲，<br>從想法做出來。</h1>
+      <p>PlumeCore_Project 是一款以場景節點與組件為核心的 2D 遊戲引擎。下載桌面版，在同一個工作空間建立場景、設定物理與邏輯，再匯出你的遊戲。</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/kyle20130422-hash/PlumeCore/releases/download/test-build/PlumeCore-Setup.exe">下載 Windows 安裝檔</a>
+        <a class="button secondary" href="https://github.com/kyle20130422-hash/PlumeCore/releases/tag/test-build">版本資訊</a>
       </div>
-
-      <!-- HTML 遊戲引擎 -->
-      <div class="engine-card">
-        <div>
-          <span class="badge badge-lite">輕量入門引擎</span>
-          <div class="card-header">
-            <h2>HTML 遊戲引擎</h2>
-          </div>
-          <div class="card-body">
-            <p>採用直觀的 XML 樹狀結構與多場景分頁，適合快速原型設計與初學者入門。</p>
-            <ul class="feature-list">
-              <li>直觀的 XML 節點樹狀管理</li>
-              <li>多場景 Tab 分頁輕鬆切換</li>
-              <li>極致輕量化，載入速度極快</li>
-              <li>支援基礎 2D 元素與邏輯綁定</li>
-              <li>支援桌面安裝與獨立運作</li>
-            </ul>
-          </div>
-        </div>
-        <div class="btn-group">
-          <a href="遊戲引擎.html" class="btn btn-primary">線上直接啟動</a>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <footer>
-    <p>© 2026 PlumeCore Engine Studio. Developed by 迷幻大貓貓.</p>
-  </footer>
-
-  <script>
-    // 註冊 Service Worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('Service Worker 註冊成功'))
-          .catch(err => console.log('Service Worker 註冊失敗:', err));
-      });
-    }
-  </script>
+      <div class="release">測試版 · Windows 64 位元 · 單一安裝檔</div>
+    </section>
+    <section class="features" aria-label="PlumeCore 功能">
+      <article class="card">
+        <div class="icon" aria-hidden="true">◈</div>
+        <h2>場景與組件</h2>
+        <p>用節點組合角色、碰撞、重力、跳躍、攝影機與房間，邊編輯邊 Play 預覽。</p>
+      </article>
+      <article class="card">
+        <div class="icon" aria-hidden="true">▣</div>
+        <h2>專案留在你的電腦</h2>
+        <p>編輯器會自動保存專案。安裝程式放在使用者程式資料夾，不會把整套開發檔散落在桌面。</p>
+      </article>
+      <article class="card">
+        <div class="icon" aria-hidden="true">✦</div>
+        <h2>替你的遊戲換圖示</h2>
+        <p>在專案中選擇桌面圖示；建立專案 EXE 或匯出遊戲時，會把同一張圖示套用到 EXE。</p>
+      </article>
+    </section>
+    <aside class="install">
+      <strong>安裝與儲存位置</strong><br>
+      安裝程式會把 PlumeCore 放在 <code>%LOCALAPPDATA%\Programs\PlumeCore</code>，並建立桌面捷徑。專案自動保存於該程式資料夾內的 <code>Project</code> 目錄。解除安裝時可選擇保留或一併刪除專案紀錄；預設桌面捷徑與安裝檔使用 PlumeCore 標誌。
+    </aside>
+  </main>
+  <footer><div class="wrap">PlumeCore_Project · 由迷幻大貓貓製作</div></footer>
 </body>
 </html>
+
